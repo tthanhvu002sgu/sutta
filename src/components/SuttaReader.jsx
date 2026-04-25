@@ -248,11 +248,21 @@ function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateS
 }
 
 export default function SuttaReader({ sutta }) {
-  const { annotationMode, updateSutta, settings, removeAnnotation } = useApp();
+  const { annotationMode, updateSutta, settings, removeAnnotation, showSummary, setShowSummary } = useApp();
   const [tooltip, setTooltip] = useState(null);
   const [popup, setPopup] = useState(null);
 
   const isPopupMode = settings.annotationDisplay !== 'sidebar';
+
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === 'Escape' && showSummary) {
+        setShowSummary(false);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [showSummary, setShowSummary]);
 
   const updateSuttaContent = useCallback((newHtml, skipOrphanCheck = false) => {
     if (!skipOrphanCheck) {
@@ -311,29 +321,47 @@ export default function SuttaReader({ sutta }) {
         <h1 className="sutta-title" contentEditable suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {title: e.target.innerText})}>{sutta.title}</h1>
         {sutta.subtitle && <div className="sutta-subtitle" contentEditable suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {subtitle: e.target.innerText})}>{sutta.subtitle}</div>}
 
-        <FullEditor
-          sutta={sutta}
-          annotationMode={annotationMode}
-          onShowPopup={setPopup}
-          onShowTooltip={(data) => {
-            if (!isPopupMode) {
-              if (data && data.pinned) {
-                // If in sidebar mode and clicked, maybe highlight the sidebar item instead of showing popup
-                const sidebarItem = document.getElementById(`sidebar-anno-${data.annotationId}`);
-                if (sidebarItem) {
-                  sidebarItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                  const originalBg = sidebarItem.style.background;
-                  sidebarItem.style.background = 'var(--bg3)';
-                  setTimeout(() => sidebarItem.style.background = originalBg, 1500);
+        {showSummary && (
+          <div style={{ marginBottom: 16, padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Đang hiển thị Bản giải thích (Tóm tắt)</span>
+            <button className="btn btn-sm" onClick={() => setShowSummary(false)}>Đóng (ESC)</button>
+          </div>
+        )}
+
+        {showSummary ? (
+          <textarea
+            className="form-textarea"
+            style={{ width: '100%', minHeight: '400px', padding: 16, fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, border: 'none', background: 'transparent', resize: 'vertical' }}
+            placeholder="Dán bản giải thích / tóm tắt từ AI vào đây..."
+            value={sutta.summaryContent || ''}
+            onChange={e => updateSutta(sutta.id, { summaryContent: e.target.value })}
+            autoFocus
+          />
+        ) : (
+          <FullEditor
+            sutta={sutta}
+            annotationMode={annotationMode}
+            onShowPopup={setPopup}
+            onShowTooltip={(data) => {
+              if (!isPopupMode) {
+                if (data && data.pinned) {
+                  // If in sidebar mode and clicked, maybe highlight the sidebar item instead of showing popup
+                  const sidebarItem = document.getElementById(`sidebar-anno-${data.annotationId}`);
+                  if (sidebarItem) {
+                    sidebarItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    const originalBg = sidebarItem.style.background;
+                    sidebarItem.style.background = 'var(--bg3)';
+                    setTimeout(() => sidebarItem.style.background = originalBg, 1500);
+                  }
                 }
+                return;
               }
-              return;
-            }
-            if (!data && tooltip && tooltip.pinned) return;
-            setTooltip(data);
-          }}
-          updateSuttaContent={updateSuttaContent}
-        />
+              if (!data && tooltip && tooltip.pinned) return;
+              setTooltip(data);
+            }}
+            updateSuttaContent={updateSuttaContent}
+          />
+        )}
       </div>
 
       {tooltip && sutta.annotations && sutta.annotations[tooltip.annotationId] && (

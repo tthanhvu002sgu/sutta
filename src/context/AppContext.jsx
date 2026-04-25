@@ -17,6 +17,7 @@ export function AppProvider({ children }) {
   const [activeSuttaId, setActiveSuttaId] = useState(null);
   const [view, setView] = useState('reader'); // 'reader' | 'settings'
   const [annotationMode, setAnnotationMode] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
 
   // Initial load
@@ -144,6 +145,7 @@ export function AppProvider({ children }) {
       suttas, activeSutta, activeSuttaId, setActiveSuttaId,
       view, setView,
       annotationMode, setAnnotationMode,
+      showSummary, setShowSummary,
       settings, updateSetting,
       addSutta, deleteSutta, updateSutta,
       addAnnotation, removeAnnotation,

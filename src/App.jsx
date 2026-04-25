@@ -6,7 +6,7 @@ import Settings from './components/Settings';
 import UploadModal from './components/UploadModal';
 
 function AppShell() {
-  const { activeSutta, view, annotationMode, setAnnotationMode, settings, updateSetting } = useApp();
+  const { activeSutta, view, annotationMode, setAnnotationMode, settings, updateSetting, showSummary, setShowSummary } = useApp();
   const [showUpload, setShowUpload] = useState(false);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(300);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -212,6 +212,16 @@ function AppShell() {
         {/* Toolbar (only for reader with a sutta) */}
         {view === 'reader' && activeSutta && (
           <div className="toolbar">
+            <button
+              className={`btn btn-sm ${showSummary ? 'btn-primary' : ''}`}
+              onClick={() => setShowSummary(!showSummary)}
+              title={showSummary ? 'Quay lại Nội dung Kinh (ESC)' : 'Mở bản giải thích / tóm tắt'}
+            >
+              {showSummary ? '📖 Bản giải thích' : '📖 Bản giải thích'}
+            </button>
+
+            <div className="toolbar-sep" />
+
             <span className="toolbar-label">Font:</span>
             <select
               className="select-input"
