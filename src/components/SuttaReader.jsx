@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useApp } from '../context/AppContext';
 
 function migrateText(text, annotations, blockId) {
@@ -251,6 +252,7 @@ export default function SuttaReader({ sutta }) {
   const { annotationMode, updateSutta, settings, removeAnnotation, showSummary, setShowSummary } = useApp();
   const [tooltip, setTooltip] = useState(null);
   const [popup, setPopup] = useState(null);
+  const [isEditingSummary, setIsEditingSummary] = useState(false);
 
   const isPopupMode = settings.annotationDisplay !== 'sidebar';
 
@@ -323,20 +325,50 @@ export default function SuttaReader({ sutta }) {
 
         {showSummary && (
           <div style={{ marginBottom: 16, padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Đang hiển thị Bản giải thích (Tóm tắt)</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Bản giải thích (Tóm tắt)</span>
+              <div style={{ display: 'flex', background: 'var(--bg)', borderRadius: 4, padding: 2, border: '1px solid var(--border)' }}>
+                <button
+                  className={`btn btn-sm ${!isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ border: 'none', borderRadius: 3 }}
+                  onClick={() => setIsEditingSummary(false)}
+                >
+                  Xem
+                </button>
+                <button
+                  className={`btn btn-sm ${isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ border: 'none', borderRadius: 3 }}
+                  onClick={() => setIsEditingSummary(true)}
+                >
+                  Sửa
+                </button>
+              </div>
+            </div>
             <button className="btn btn-sm" onClick={() => setShowSummary(false)}>Đóng (ESC)</button>
           </div>
         )}
 
         {showSummary ? (
-          <textarea
-            className="form-textarea"
-            style={{ width: '100%', minHeight: '400px', padding: 16, fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, border: 'none', background: 'transparent', resize: 'vertical' }}
-            placeholder="Dán bản giải thích / tóm tắt từ AI vào đây..."
-            value={sutta.summaryContent || ''}
-            onChange={e => updateSutta(sutta.id, { summaryContent: e.target.value })}
-            autoFocus
-          />
+          isEditingSummary ? (
+            <textarea
+              className="form-textarea"
+              style={{ width: '100%', minHeight: '400px', padding: 16, fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, border: 'none', background: 'transparent', resize: 'vertical' }}
+              placeholder="Dán bản giải thích / tóm tắt từ AI vào đây (Hỗ trợ Markdown)..."
+              value={sutta.summaryContent || ''}
+              onChange={e => updateSutta(sutta.id, { summaryContent: e.target.value })}
+              autoFocus
+            />
+          ) : (
+            <div className="markdown-body" style={{ padding: '0 16px', fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, minHeight: 400 }}>
+              {sutta.summaryContent ? (
+                <ReactMarkdown>{sutta.summaryContent}</ReactMarkdown>
+              ) : (
+                <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: 40 }}>
+                  Chưa có nội dung. Bấm "Sửa" để dán bản giải thích vào đây.
+                </div>
+              )}
+            </div>
+          )
         ) : (
           <FullEditor
             sutta={sutta}
