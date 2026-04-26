@@ -10,6 +10,8 @@ function AppShell() {
   const [showUpload, setShowUpload] = useState(false);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(300);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileRightSidebarOpen, setMobileRightSidebarOpen] = useState(false);
 
   const startResizingRight = useCallback((e) => {
     e.preventDefault();
@@ -188,11 +190,14 @@ function AppShell() {
 
   return (
     <div className="app">
-      <Sidebar onUpload={() => setShowUpload(true)} />
+      <Sidebar onUpload={() => { setShowUpload(true); setMobileSidebarOpen(false); }} mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} />
 
       <div className="main">
         {/* Top bar */}
         <div className="topbar">
+          <button className="icon-btn mobile-menu-btn" onClick={() => setMobileSidebarOpen(true)} title="Menu">
+            ☰
+          </button>
           <div className="topbar-breadcrumb">
             {view === 'settings' ? 'CÀI ĐẶT' : activeSutta ? 'KINH ĐIỂN' : ''}
           </div>
@@ -204,6 +209,11 @@ function AppShell() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {annotationCount > 0 && (
                 <span className="tag">{annotationCount} chú thích</span>
+              )}
+              {settings.annotationDisplay === 'sidebar' && annotationCount > 0 && (
+                <button className="icon-btn mobile-right-menu-btn" onClick={() => setMobileRightSidebarOpen(true)} title="Xem chú thích">
+                  📝
+                </button>
               )}
             </div>
           )}
@@ -331,12 +341,14 @@ function AppShell() {
       {view === 'reader' && activeSutta && settings.annotationDisplay === 'sidebar' && (
         <>
           <div
-            className="resizer-right"
+            className="resizer-right desktop-only"
             onMouseDown={startResizingRight}
             style={{ width: 4, cursor: 'col-resize', background: 'var(--border)', zIndex: 10, flexShrink: 0 }}
           />
-          <div className="sidebar right-sidebar" style={{ width: rightSidebarWidth, minWidth: rightSidebarWidth, borderRight: 'none', borderLeft: 'none' }}>
-            <div className="sidebar-header" style={{ justifyContent: 'center' }}>
+          {mobileRightSidebarOpen && <div className="sidebar-overlay right-sidebar-overlay" onClick={() => setMobileRightSidebarOpen(false)} />}
+          <div className={`sidebar right-sidebar${mobileRightSidebarOpen ? ' mobile-open' : ''}`} style={{ width: rightSidebarWidth, minWidth: rightSidebarWidth, borderRight: 'none', borderLeft: 'none' }}>
+            <div className="sidebar-header" style={{ justifyContent: 'center', position: 'relative' }}>
+              <button className="icon-btn mobile-close-btn right-sidebar-close" onClick={() => setMobileRightSidebarOpen(false)} style={{ position: 'absolute', left: 10 }}>✕</button>
               <div className="sidebar-logo">DANH SÁCH CHÚ THÍCH</div>
             </div>
             <div className="sidebar-list" style={{ padding: 12 }}>
@@ -357,6 +369,9 @@ function AppShell() {
                         const originalBg = mark.style.background;
                         mark.style.background = 'color-mix(in srgb, var(--annotation-color) 25%, transparent)';
                         setTimeout(() => mark.style.background = originalBg, 1500);
+                        if (window.innerWidth <= 768) {
+                          setMobileRightSidebarOpen(false);
+                        }
                       }
                     }}
                   >

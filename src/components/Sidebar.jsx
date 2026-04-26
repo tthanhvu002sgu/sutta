@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 
-export default function Sidebar({ onUpload }) {
+export default function Sidebar({ onUpload, mobileOpen, onCloseMobile }) {
   const { suttas, activeSuttaId, setActiveSuttaId, deleteSutta, setView, view } = useApp();
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
@@ -12,13 +12,18 @@ export default function Sidebar({ onUpload }) {
   );
 
   return (
-    <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
+    <>
+      {mobileOpen && <div className="sidebar-overlay" onClick={onCloseMobile} />}
+      <aside className={`sidebar${collapsed ? ' collapsed' : ''}${mobileOpen ? ' mobile-open' : ''}`}>
       <div className="sidebar-header">
         <div className="sidebar-logo">
           ☸ Sutta
           <span>Annotator</span>
         </div>
-        <button className="icon-btn" onClick={() => setCollapsed(!collapsed)} title="Thu gọn sidebar">
+        <button className="icon-btn mobile-close-btn" onClick={onCloseMobile} title="Đóng menu">
+          ✕
+        </button>
+        <button className="icon-btn desktop-collapse-btn" onClick={() => setCollapsed(!collapsed)} title="Thu gọn sidebar">
           {collapsed ? '›' : '‹'}
         </button>
       </div>
@@ -48,7 +53,7 @@ export default function Sidebar({ onUpload }) {
           <div
             key={sutta.id}
             className={`sidebar-item${activeSuttaId === sutta.id && view === 'reader' ? ' active' : ''}`}
-            onClick={() => { setActiveSuttaId(sutta.id); setView('reader'); }}
+            onClick={() => { setActiveSuttaId(sutta.id); setView('reader'); if(onCloseMobile) onCloseMobile(); }}
             id={`sidebar-item-${sutta.id}`}
           >
             <span className="sidebar-item-icon">☸</span>
@@ -73,12 +78,13 @@ export default function Sidebar({ onUpload }) {
         <button
           className={`btn btn-sm btn-ghost${view === 'settings' ? ' btn-primary' : ''}`}
           style={{ width: '100%' }}
-          onClick={() => setView(view === 'settings' ? 'reader' : 'settings')}
+          onClick={() => { setView(view === 'settings' ? 'reader' : 'settings'); if(onCloseMobile) onCloseMobile(); }}
           id="btn-settings"
         >
           ⚙ Cài đặt
         </button>
       </div>
     </aside>
+    </>
   );
 }

@@ -528,3 +528,96 @@ input[type="color"] { opacity: 0; width: 0; height: 0; position: absolute; }
 .markdown-body pre { background: var(--bg2); padding: 16px; border-radius: 6px; overflow-x: auto; }
 .markdown-body code { font-family: monospace; font-size: 0.9em; background: var(--bg3); padding: 2px 4px; border-radius: 3px; }
 .markdown-body pre code { padding: 0; background: transparent; }
+
+/* Mobile Utilities */
+.mobile-menu-btn, .mobile-right-menu-btn, .mobile-close-btn { display: none; }
+.desktop-collapse-btn { display: flex; }
+.desktop-only { display: block; }
+.sidebar-overlay { display: none; }
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .mobile-menu-btn, .mobile-right-menu-btn, .mobile-close-btn { display: flex; }
+  .desktop-collapse-btn { display: none !important; }
+  .desktop-only { display: none !important; }
+
+  /* Left Sidebar */
+  .sidebar:not(.right-sidebar) {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: -100%;
+    z-index: 1000;
+    transition: left 0.3s ease;
+    width: 280px !important;
+    min-width: 280px !important;
+    box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+  }
+  .sidebar:not(.right-sidebar).mobile-open {
+    left: 0;
+  }
+
+  /* Right Sidebar */
+  .right-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    right: -100%;
+    z-index: 1000;
+    transition: right 0.3s ease;
+    width: 280px !important;
+    min-width: 280px !important;
+    box-shadow: -4px 0 15px rgba(0,0,0,0.1);
+  }
+  .right-sidebar.mobile-open {
+    right: 0;
+  }
+
+  /* Overlays */
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 999;
+    backdrop-filter: blur(2px);
+    animation: fadeIn 0.2s ease;
+  }
+  
+  /* Layout Spacing */
+  .editor-area {
+    padding: 24px 16px;
+  }
+  .sutta-title {
+    font-size: 1.6em;
+  }
+  
+  .settings-panel {
+    padding: 24px 16px;
+  }
+
+  /* Toolbar Scroll */
+  .toolbar {
+    padding: 8px 12px;
+    gap: 6px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+  }
+  .toolbar::-webkit-scrollbar {
+    display: none; /* Safari/Chrome */
+  }
+  
+  .toolbar-sep {
+    margin: 0 2px;
+  }
+  
+  /* Modal size */
+  .modal {
+    width: 90vw;
+    padding: 20px;
+    max-height: 90vh;
+  }
+}
+
