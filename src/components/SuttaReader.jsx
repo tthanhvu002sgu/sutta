@@ -130,6 +130,7 @@ function AnnotationTooltip({ annotation, x, y, pinned, onClose, onEdit, annotati
 
 function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateSuttaContent }) {
   const ref = useRef();
+  const [resizingMark, setResizingMark] = useState(null);
 
   useEffect(() => {
     if (ref.current && ref.current.dataset.suttaId !== sutta.id) {
@@ -181,6 +182,7 @@ function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateS
 
   useEffect(() => {
     const handleShortcutAnnotate = () => {
+      if (resizingMark) return;
       const sel = window.getSelection();
       if (!sel.rangeCount) return;
       createAnnotation(sel.getRangeAt(0));
@@ -188,9 +190,11 @@ function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateS
 
     window.addEventListener('shortcut-annotate', handleShortcutAnnotate);
     return () => window.removeEventListener('shortcut-annotate', handleShortcutAnnotate);
-  }, [createAnnotation]);
+  }, [createAnnotation, resizingMark]);
 
   const handleMouseUp = (e) => {
+    if (resizingMark) return;
+
     let target = e.target;
     while (target && target !== ref.current) {
       if (target.tagName === 'MARK') {
@@ -215,36 +219,144 @@ function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateS
     createAnnotation(sel.getRangeAt(0));
   };
 
+  const handleDoubleClick = (e) => {
+    let target = e.target;
+    while (target && target !== ref.current) {
+      if (target.tagName === 'MARK') {
+        const id = target.dataset.annotationId;
+        
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        
+        setResizingMark(id);
+        onShowTooltip(null);
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      target = target.parentNode;
+    }
+  };
+
+  const saveResize = () => {
+    if (!resizingMark) return;
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    
+    const range = sel.getRangeAt(0);
+    const id = resizingMark;
+    
+    const newMark = document.createElement('mark');
+    newMark.className = 'annotated';
+    newMark.dataset.annotationId = id;
+    
+    try {
+      const content = range.extractContents();
+      
+      const tempDiv = document.createElement('div');
+      tempDiv.appendChild(content);
+      const innerMarks = tempDiv.querySelectorAll('mark');
+      innerMarks.forEach(m => {
+        const parent = m.parentNode;
+        while (m.firstChild) {
+          parent.insertBefore(m.firstChild, m);
+        }
+        parent.removeChild(m);
+      });
+      
+      while(tempDiv.firstChild) {
+          newMark.appendChild(tempDiv.firstChild);
+      }
+      
+      range.insertNode(newMark);
+    } catch(err) {
+      console.error(err);
+    }
+    
+    const allMarks = ref.current.querySelectorAll(`mark[data-annotation-id="${id}"]`);
+    allMarks.forEach(m => {
+      if (m !== newMark) {
+        const parent = m.parentNode;
+        while (m.firstChild) {
+          parent.insertBefore(m.firstChild, m);
+        }
+        parent.removeChild(m);
+      }
+    });
+    
+    ref.current.normalize();
+    
+    sel.removeAllRanges();
+    setResizingMark(null);
+    updateSuttaContent(ref.current.innerHTML);
+  };
+
+  const cancelResize = () => {
+    setResizingMark(null);
+    window.getSelection().removeAllRanges();
+  };
+
   return (
-    <div
-      ref={ref}
-      className="full-editor"
-      contentEditable={!annotationMode}
-      suppressContentEditableWarning
-      onBlur={handleBlur}
-      onMouseUp={handleMouseUp}
-      onMouseOver={(e) => {
-        if (annotationMode) return;
-        let target = e.target;
-        if (target.tagName === 'MARK') {
-          const rect = target.getBoundingClientRect();
-          onShowTooltip({
-            annotationId: target.dataset.annotationId,
-            x: rect.left,
-            y: rect.bottom + 6,
-            pinned: false,
-            word: target.textContent,
-            target
-          });
-        }
-      }}
-      onMouseOut={(e) => {
-        if (!annotationMode && e.target.tagName === 'MARK') {
-          onShowTooltip(null);
-        }
-      }}
-      style={{ cursor: annotationMode ? 'crosshair' : 'text', minHeight: '300px', outline: 'none' }}
-    />
+    <>
+      <div
+        ref={ref}
+        className="full-editor"
+        contentEditable={!annotationMode && !resizingMark}
+        suppressContentEditableWarning
+        onBlur={handleBlur}
+        onMouseUp={handleMouseUp}
+        onDoubleClick={handleDoubleClick}
+        onMouseOver={(e) => {
+          if (resizingMark) return;
+          if (annotationMode) return;
+          let target = e.target;
+          if (target.tagName === 'MARK') {
+            const rect = target.getBoundingClientRect();
+            onShowTooltip({
+              annotationId: target.dataset.annotationId,
+              x: rect.left,
+              y: rect.bottom + 6,
+              pinned: false,
+              word: target.textContent,
+              target
+            });
+          }
+        }}
+        onMouseOut={(e) => {
+          if (resizingMark) return;
+          if (!annotationMode && e.target.tagName === 'MARK') {
+            onShowTooltip(null);
+          }
+        }}
+        style={{ cursor: annotationMode ? 'crosshair' : 'text', minHeight: '300px', outline: 'none' }}
+      />
+      {resizingMark && (
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'var(--bg)',
+          border: '1px solid var(--border)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          padding: '10px 20px',
+          borderRadius: 30,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          zIndex: 1000
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 500 }}>Kéo thả vùng chọn để sửa giới hạn đoạn chú thích</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-sm btn-ghost" onClick={cancelResize}>Hủy</button>
+            <button className="btn btn-sm btn-primary" onClick={saveResize}>Lưu</button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
