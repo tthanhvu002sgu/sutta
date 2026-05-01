@@ -128,7 +128,7 @@ function AnnotationTooltip({ annotation, x, y, pinned, onClose, onEdit, annotati
   );
 }
 
-function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateSuttaContent }) {
+function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateSuttaContent, isMobile }) {
   const ref = useRef();
   const [resizingMark, setResizingMark] = useState(null);
 
@@ -304,7 +304,7 @@ function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateS
       <div
         ref={ref}
         className="full-editor"
-        contentEditable={!annotationMode && !resizingMark}
+        contentEditable={!isMobile && !annotationMode && !resizingMark}
         suppressContentEditableWarning
         onBlur={handleBlur}
         onMouseUp={handleMouseUp}
@@ -365,6 +365,13 @@ export default function SuttaReader({ sutta }) {
   const [tooltip, setTooltip] = useState(null);
   const [popup, setPopup] = useState(null);
   const [isEditingSummary, setIsEditingSummary] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const isPopupMode = settings.annotationDisplay !== 'sidebar';
 
@@ -432,8 +439,8 @@ export default function SuttaReader({ sutta }) {
   return (
     <div className="editor-area" onClick={() => {}}>
       <div className="editor-inner">
-        <h1 className="sutta-title" contentEditable suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {title: e.target.innerText})}>{sutta.title}</h1>
-        {sutta.subtitle && <div className="sutta-subtitle" contentEditable suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {subtitle: e.target.innerText})}>{sutta.subtitle}</div>}
+        <h1 className="sutta-title" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {title: e.target.innerText})}>{sutta.title}</h1>
+        {sutta.subtitle && <div className="sutta-subtitle" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {subtitle: e.target.innerText})}>{sutta.subtitle}</div>}
 
         {showSummary && (
           <div style={{ marginBottom: 16, padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -484,6 +491,7 @@ export default function SuttaReader({ sutta }) {
         ) : (
           <FullEditor
             sutta={sutta}
+            isMobile={isMobile}
             annotationMode={annotationMode}
             onShowPopup={setPopup}
             onShowTooltip={(data) => {
