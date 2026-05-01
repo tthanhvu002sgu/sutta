@@ -177,9 +177,7 @@ export function AppProvider({ children }) {
     
     let content = file.content;
     if (file.truncated || !content) {
-      const rawResponse = await fetch(file.raw_url, {
-        headers: { 'Authorization': `token ${settings.githubToken}` }
-      });
+      const rawResponse = await fetch(file.raw_url);
       if (!rawResponse.ok) throw new Error('Lỗi khi tải nội dung file thô từ Gist');
       content = await rawResponse.text();
     }
