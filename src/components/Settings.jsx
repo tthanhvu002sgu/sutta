@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 
 const FONTS = ['Lora', 'Times New Roman', 'Google Sans'];
 const FONT_SIZES = [13, 14, 15, 16, 17, 18, 19, 20, 22, 24];
 
 export default function Settings() {
-  const { suttas, settings, updateSetting, restoreData } = useApp();
+  const { suttas, settings, updateSetting, restoreData, syncToGist, syncFromGist } = useApp();
+  const [syncStatus, setSyncStatus] = useState('');
   const colorRef = { current: null };
 
   const handleExportData = () => {
@@ -46,6 +48,29 @@ export default function Settings() {
       reader.readAsText(file);
     };
     input.click();
+  };
+
+  const handleSyncToGist = async () => {
+    setSyncStatus('Đang đồng bộ lên Gist...');
+    try {
+      await syncToGist();
+      setSyncStatus('Đồng bộ lên Gist thành công!');
+      setTimeout(() => setSyncStatus(''), 3000);
+    } catch (err) {
+      setSyncStatus(`Lỗi: ${err.message}`);
+    }
+  };
+
+  const handleSyncFromGist = async () => {
+    if (!window.confirm('Cảnh báo: Dữ liệu hiện tại sẽ bị ghi đè hoàn toàn bởi dữ liệu từ Gist. Bạn có chắc chắn muốn tiếp tục?')) return;
+    setSyncStatus('Đang tải từ Gist...');
+    try {
+      await syncFromGist();
+      setSyncStatus('Tải từ Gist thành công!');
+      setTimeout(() => setSyncStatus(''), 3000);
+    } catch (err) {
+      setSyncStatus(`Lỗi: ${err.message}`);
+    }
   };
 
   return (
