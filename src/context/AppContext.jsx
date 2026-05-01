@@ -9,6 +9,8 @@ const DEFAULT_SETTINGS = {
   fontFamily: 'Lora',
   fontSize: 17,
   annotationDisplay: 'popup',
+  githubToken: '',
+  gistId: '',
 };
 
 export function AppProvider({ children }) {
@@ -136,6 +138,47 @@ export function AppProvider({ children }) {
     setActiveSuttaId(importedSuttas[0]?.id || null);
   }
 
+  async function syncToGist() {
+    if (!settings.githubToken || !settings.gistId) {
+      throw new Error('Vui lòng cấu hình GitHub Token và Gist ID');
+    }
+    const dataStr = JSON.stringify(suttas, null, 2);
+    const response = await fetch(`https://api.github.com/gists/${settings.gistId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `token ${settings.githubToken}`,
+        'Accept': 'application/vnd.github.v3+json',
+      },
+      body: JSON.stringify({
+        files: {
+          'sutta-backup.json': {
+            content: dataStr
+          }
+        }
+      })
+    });
+    if (!response.ok) throw new Error('Lỗi khi lưu lên Gist');
+  }
+
+  async function syncFromGist() {
+    if (!settings.githubToken || !settings.gistId) {
+      throw new Error('Vui lòng cấu hình GitHub Token và Gist ID');
+    }
+    const response = await fetch(`https://api.github.com/gists/${settings.gistId}`, {
+      headers: {
+        'Authorization': `token ${settings.githubToken}`,
+        'Accept': 'application/vnd.github.v3+json',
+      }
+    });
+    if (!response.ok) throw new Error('Lỗi khi tải từ Gist');
+    const data = await response.json();
+    const content = data.files['sutta-backup.json']?.content;
+    if (!content) throw new Error('Không tìm thấy file sutta-backup.json trong Gist');
+    
+    const importedSuttas = JSON.parse(content);
+    restoreData(importedSuttas);
+  }
+
   if (!isLoaded) {
     return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>Đang tải dữ liệu...</div>;
   }
@@ -150,6 +193,7 @@ export function AppProvider({ children }) {
       addSutta, deleteSutta, updateSutta,
       addAnnotation, removeAnnotation,
       restoreData,
+      syncToGist, syncFromGist,
     }}>
       {children}
     </AppContext.Provider>

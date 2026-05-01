@@ -161,19 +161,70 @@ export default function Settings() {
 
         {/* Data */}
         <div className="settings-section">
-          <div className="settings-section-title">Dữ liệu</div>
+          <div className="settings-section-title">Dữ liệu & Đồng bộ</div>
 
           <div className="settings-row">
             <div className="settings-row-info">
-              <div className="settings-row-label">Sao lưu & Khôi phục</div>
+              <div className="settings-row-label">GitHub Token</div>
+              <div className="settings-row-desc">Personal Access Token (có quyền gist)</div>
+            </div>
+            <input
+              type="password"
+              className="text-input"
+              value={settings.githubToken || ''}
+              onChange={e => updateSetting('githubToken', e.target.value)}
+              placeholder="ghp_..."
+              style={{ width: '200px' }}
+            />
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Gist ID</div>
+              <div className="settings-row-desc">ID của Gist lưu trữ dữ liệu</div>
+            </div>
+            <input
+              type="text"
+              className="text-input"
+              value={settings.gistId || ''}
+              onChange={e => updateSetting('gistId', e.target.value)}
+              placeholder="e.g. 1a2b3c..."
+              style={{ width: '200px' }}
+            />
+          </div>
+
+          {syncStatus && (
+            <div style={{ padding: '8px 12px', background: 'var(--bg2)', borderRadius: 4, marginBottom: 16, fontSize: 13, color: 'var(--text)' }}>
+              {syncStatus}
+            </div>
+          )}
+
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Đồng bộ Gist</div>
+              <div className="settings-row-desc">Đồng bộ dữ liệu qua GitHub Gist</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-sm" onClick={handleSyncToGist}>
+                ⬆ Lưu lên Gist
+              </button>
+              <button className="btn btn-sm btn-danger" onClick={handleSyncFromGist}>
+                ⬇ Tải từ Gist
+              </button>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Sao lưu & Khôi phục (Local)</div>
               <div className="settings-row-desc">Tải dữ liệu về máy hoặc khôi phục từ file có sẵn</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-sm" onClick={handleExportData}>
-                ⬇ Sao lưu
+                ⬇ Sao lưu file
               </button>
               <button className="btn btn-sm btn-danger" onClick={handleImportData}>
-                ⬆ Khôi phục
+                ⬆ Khôi phục từ file
               </button>
             </div>
           </div>
