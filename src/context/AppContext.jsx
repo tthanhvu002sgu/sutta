@@ -172,8 +172,17 @@ export function AppProvider({ children }) {
     });
     if (!response.ok) throw new Error('Lỗi khi tải từ Gist');
     const data = await response.json();
-    const content = data.files['sutta-backup.json']?.content;
-    if (!content) throw new Error('Không tìm thấy file sutta-backup.json trong Gist');
+    const file = data.files['sutta-backup.json'];
+    if (!file) throw new Error('Không tìm thấy file sutta-backup.json trong Gist');
+    
+    let content = file.content;
+    if (file.truncated || !content) {
+      const rawResponse = await fetch(file.raw_url, {
+        headers: { 'Authorization': `token ${settings.githubToken}` }
+      });
+      if (!rawResponse.ok) throw new Error('Lỗi khi tải nội dung file thô từ Gist');
+      content = await rawResponse.text();
+    }
     
     const importedSuttas = JSON.parse(content);
     restoreData(importedSuttas);
