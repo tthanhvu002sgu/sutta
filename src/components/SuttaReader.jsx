@@ -66,7 +66,7 @@ function AnnotationPopup({ annotationId, initialWord, suttaId, onClose, onRemove
   }
 
   return (
-    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) { if(!existing && onRemoveMark) onRemoveMark(annotationId); onClose(); } }}>
+    <div className="modal-overlay">
       <div className="modal" style={{ width: 420 }}>
         <div className="form-group">
           <label className="form-label">Nội dung chú thích</label>
