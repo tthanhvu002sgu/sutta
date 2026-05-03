@@ -128,7 +128,123 @@ function AnnotationTooltip({ annotation, x, y, pinned, onClose, onEdit, annotati
   );
 }
 
-function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateSuttaContent, isMobile }) {
+function FindReplaceBar({ findText, setFindText, onClose, updateSuttaContent, focusReplace }) {
+  const [replaceText, setReplaceText] = useState('');
+  const replaceInputRef = useRef();
+  const findInputRef = useRef();
+
+  useEffect(() => {
+    if (focusReplace && replaceInputRef.current) {
+      replaceInputRef.current.focus();
+    } else if (findInputRef.current) {
+      findInputRef.current.focus();
+    }
+  }, [focusReplace, findText]);
+
+  useEffect(() => {
+    if (!window.CSS || !CSS.highlights) return;
+    const editorEl = document.querySelector('.full-editor');
+    if (!findText || !editorEl) {
+      CSS.highlights.clear();
+      return;
+    }
+
+    try {
+      const walker = document.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT, null, false);
+      const ranges = [];
+      let node;
+      const searchLen = findText.length;
+      const searchLower = findText.toLowerCase();
+
+      while ((node = walker.nextNode())) {
+        let text = node.nodeValue.toLowerCase();
+        let startIndex = 0;
+        while ((startIndex = text.indexOf(searchLower, startIndex)) !== -1) {
+          const range = new Range();
+          range.setStart(node, startIndex);
+          range.setEnd(node, startIndex + searchLen);
+          ranges.push(range);
+          startIndex += searchLen;
+        }
+      }
+
+      const highlight = new Highlight(...ranges);
+      CSS.highlights.set('search-results', highlight);
+    } catch(e) {
+      console.error(e);
+    }
+
+    return () => {
+      if (CSS.highlights) CSS.highlights.clear();
+    }
+  }, [findText]);
+
+  const doReplaceAll = () => {
+    const editorEl = document.querySelector('.full-editor');
+    if (!findText || !editorEl) return;
+
+    const walker = document.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT, null, false);
+    const nodes = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      nodes.push(node);
+    }
+    
+    let count = 0;
+    const searchLower = findText.toLowerCase();
+
+    nodes.forEach(n => {
+      let text = n.nodeValue;
+      let lowerText = text.toLowerCase();
+      if (lowerText.includes(searchLower)) {
+        const escapedFind = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(escapedFind, 'gi');
+        n.nodeValue = text.replace(regex, replaceText);
+        count++;
+      }
+    });
+
+    if (count > 0) {
+      updateSuttaContent(editorEl.innerHTML);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'absolute', top: 16, right: 16, background: 'var(--bg)', border: '1px solid var(--border)',
+      padding: '8px 12px', borderRadius: 8, display: 'flex', gap: 8, alignItems: 'center', zIndex: 1000,
+      boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+    }}>
+      <style>{`
+        ::highlight(search-results) {
+          background-color: rgba(255, 193, 7, 0.4);
+          color: inherit;
+        }
+      `}</style>
+      <input 
+        ref={findInputRef}
+        value={findText} 
+        onChange={e=>setFindText(e.target.value)} 
+        placeholder="Tìm kiếm..." 
+        className="form-input" 
+        style={{ width: 140, padding: '6px 10px', fontSize: 13 }} 
+      />
+      <input 
+        ref={replaceInputRef}
+        value={replaceText} 
+        onChange={e=>setReplaceText(e.target.value)} 
+        placeholder="Thay thế bằng..." 
+        className="form-input" 
+        style={{ width: 140, padding: '6px 10px', fontSize: 13 }} 
+        onKeyDown={e => { if(e.key === 'Enter') doReplaceAll() }}
+      />
+      <button className="btn btn-sm btn-primary" onClick={doReplaceAll}>Thay thế tất cả</button>
+      <button className="btn btn-sm btn-ghost" onClick={onClose} style={{ padding: '4px 8px' }}>✕</button>
+    </div>
+  );
+}
+
+function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateSuttaContent, isMobile, onOpenFindReplace }) {
   const ref = useRef();
   const [resizingMark, setResizingMark] = useState(null);
 
@@ -309,6 +425,18 @@ function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateS
         onBlur={handleBlur}
         onMouseUp={handleMouseUp}
         onDoubleClick={handleDoubleClick}
+        onKeyDown={(e) => {
+          if (e.ctrlKey && e.key === 'h') {
+            e.preventDefault();
+            const sel = window.getSelection().toString();
+            if (onOpenFindReplace) onOpenFindReplace(sel, false);
+          }
+          if (e.ctrlKey && e.key === 'd') {
+            e.preventDefault();
+            const sel = window.getSelection().toString();
+            if (onOpenFindReplace) onOpenFindReplace(sel, true);
+          }
+        }}
         onMouseOver={(e) => {
           if (resizingMark) return;
           if (annotationMode) return;
@@ -366,6 +494,15 @@ export default function SuttaReader({ sutta }) {
   const [popup, setPopup] = useState(null);
   const [isEditingSummary, setIsEditingSummary] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [findReplace, setFindReplace] = useState({ visible: false, findText: '', focusReplace: false });
+
+  const handleOpenFindReplace = useCallback((text, focusReplace) => {
+    setFindReplace(prev => ({
+      visible: true,
+      findText: text || prev.findText,
+      focusReplace
+    }));
+  }, []);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -437,7 +574,16 @@ export default function SuttaReader({ sutta }) {
   }, []);
 
   return (
-    <div className="editor-area" onClick={() => {}}>
+    <div className="editor-area" onClick={() => {}} style={{ position: 'relative' }}>
+      {findReplace.visible && (
+        <FindReplaceBar
+          findText={findReplace.findText}
+          setFindText={(text) => setFindReplace(prev => ({ ...prev, findText: text }))}
+          focusReplace={findReplace.focusReplace}
+          onClose={() => setFindReplace(prev => ({ ...prev, visible: false }))}
+          updateSuttaContent={updateSuttaContent}
+        />
+      )}
       <div className="editor-inner">
         <h1 className="sutta-title" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {title: e.target.innerText})}>{sutta.title}</h1>
         {sutta.subtitle && <div className="sutta-subtitle" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {subtitle: e.target.innerText})}>{sutta.subtitle}</div>}
@@ -494,6 +640,7 @@ export default function SuttaReader({ sutta }) {
             isMobile={isMobile}
             annotationMode={annotationMode}
             onShowPopup={setPopup}
+            onOpenFindReplace={handleOpenFindReplace}
             onShowTooltip={(data) => {
               if (!isPopupMode) {
                 if (data && data.pinned) {
