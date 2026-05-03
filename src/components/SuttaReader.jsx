@@ -128,7 +128,7 @@ function AnnotationTooltip({ annotation, x, y, pinned, onClose, onEdit, annotati
   );
 }
 
-function FindReplaceBar({ findText, setFindText, onClose, updateSuttaContent, focusReplace }) {
+function FindReplaceBar({ findText, setFindText, onClose, updateSuttaContent, focusReplace, isEditingSummary, summaryContent, suttaId, updateSutta }) {
   const [replaceText, setReplaceText] = useState('');
   const replaceInputRef = useRef();
   const findInputRef = useRef();
@@ -142,7 +142,10 @@ function FindReplaceBar({ findText, setFindText, onClose, updateSuttaContent, fo
   }, [focusReplace, findText]);
 
   useEffect(() => {
-    if (!window.CSS || !CSS.highlights) return;
+    if (!window.CSS || !CSS.highlights || isEditingSummary) {
+      if (window.CSS && CSS.highlights) CSS.highlights.clear();
+      return;
+    }
     const editorEl = document.querySelector('.full-editor');
     if (!findText || !editorEl) {
       CSS.highlights.clear();
@@ -177,11 +180,22 @@ function FindReplaceBar({ findText, setFindText, onClose, updateSuttaContent, fo
     return () => {
       if (CSS.highlights) CSS.highlights.clear();
     }
-  }, [findText]);
+  }, [findText, isEditingSummary]);
 
   const doReplaceAll = () => {
+    if (!findText) return;
+
+    if (isEditingSummary) {
+      if (!summaryContent) return;
+      const escapedFind = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escapedFind, 'gi');
+      const newContent = summaryContent.replace(regex, replaceText);
+      updateSutta(suttaId, { summaryContent: newContent });
+      return;
+    }
+
     const editorEl = document.querySelector('.full-editor');
-    if (!findText || !editorEl) return;
+    if (!editorEl) return;
 
     const walker = document.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT, null, false);
     const nodes = [];
@@ -582,6 +596,10 @@ export default function SuttaReader({ sutta }) {
           focusReplace={findReplace.focusReplace}
           onClose={() => setFindReplace(prev => ({ ...prev, visible: false }))}
           updateSuttaContent={updateSuttaContent}
+          isEditingSummary={isEditingSummary}
+          summaryContent={sutta.summaryContent}
+          suttaId={sutta.id}
+          updateSutta={updateSutta}
         />
       )}
       <div className="editor-inner">
@@ -621,6 +639,22 @@ export default function SuttaReader({ sutta }) {
               placeholder="Dán bản giải thích / tóm tắt từ AI vào đây (Hỗ trợ Markdown)..."
               value={sutta.summaryContent || ''}
               onChange={e => updateSutta(sutta.id, { summaryContent: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.ctrlKey && e.key === 'h') {
+                  e.preventDefault();
+                  const selStart = e.target.selectionStart;
+                  const selEnd = e.target.selectionEnd;
+                  const selText = e.target.value.substring(selStart, selEnd);
+                  handleOpenFindReplace(selText, false);
+                }
+                if (e.ctrlKey && e.key === 'd') {
+                  e.preventDefault();
+                  const selStart = e.target.selectionStart;
+                  const selEnd = e.target.selectionEnd;
+                  const selText = e.target.value.substring(selStart, selEnd);
+                  handleOpenFindReplace(selText, true);
+                }
+              }}
               autoFocus
             />
           ) : (
