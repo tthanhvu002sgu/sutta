@@ -6,7 +6,7 @@ import Settings from './components/Settings';
 import UploadModal from './components/UploadModal';
 
 function AppShell() {
-  const { activeSutta, view, annotationMode, setAnnotationMode, settings, updateSetting, showSummary, setShowSummary } = useApp();
+  const { activeSutta, view, annotationMode, setAnnotationMode, settings, updateSetting, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed, setAutoScrollSpeed } = useApp();
   const [showUpload, setShowUpload] = useState(false);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(300);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -229,6 +229,31 @@ function AppShell() {
             >
               {showSummary ? '📖 Bản giải thích' : '📖 Bản giải thích'}
             </button>
+
+            <div className="toolbar-sep" />
+
+            <button
+              className={`btn btn-sm ${autoScroll ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setAutoScroll(!autoScroll)}
+              title="Tự động cuộn trang"
+            >
+              {autoScroll ? '⏸ Dừng cuộn' : '▶ Tự động cuộn'}
+            </button>
+            
+            {autoScroll && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span className="toolbar-label">Tốc độ:</span>
+                <input 
+                  type="range" 
+                  min="0.5" 
+                  max="10" 
+                  step="0.5"
+                  value={autoScrollSpeed}
+                  onChange={(e) => setAutoScrollSpeed(Number(e.target.value))}
+                  style={{ width: 60 }}
+                />
+              </div>
+            )}
 
             <div className="toolbar-sep" />
 

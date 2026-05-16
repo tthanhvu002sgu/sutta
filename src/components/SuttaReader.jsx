@@ -503,12 +503,42 @@ function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateS
 }
 
 export default function SuttaReader({ sutta }) {
-  const { annotationMode, updateSutta, settings, removeAnnotation, showSummary, setShowSummary } = useApp();
+  const { annotationMode, updateSutta, settings, removeAnnotation, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed } = useApp();
   const [tooltip, setTooltip] = useState(null);
   const [popup, setPopup] = useState(null);
   const [isEditingSummary, setIsEditingSummary] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [findReplace, setFindReplace] = useState({ visible: false, findText: '', focusReplace: false });
+  const scrollAreaRef = useRef();
+
+  useEffect(() => {
+    let animationFrameId;
+    let lastTime = performance.now();
+
+    const scrollLoop = (time) => {
+      if (autoScroll && scrollAreaRef.current) {
+        const delta = time - lastTime;
+        // Speed scaling: 1 = ~10px/s, 5 = ~50px/s, etc.
+        const scrollAmount = (autoScrollSpeed * 20 * delta) / 1000;
+        
+        scrollAreaRef.current.scrollTop += scrollAmount;
+
+        // Auto-stop when reached bottom
+        if (scrollAreaRef.current.scrollTop + scrollAreaRef.current.clientHeight >= scrollAreaRef.current.scrollHeight - 1) {
+          setAutoScroll(false);
+        }
+      }
+      lastTime = time;
+      animationFrameId = requestAnimationFrame(scrollLoop);
+    };
+
+    if (autoScroll) {
+      lastTime = performance.now();
+      animationFrameId = requestAnimationFrame(scrollLoop);
+    }
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [autoScroll, autoScrollSpeed, setAutoScroll]);
 
   const handleOpenFindReplace = useCallback((text, focusReplace) => {
     setFindReplace(prev => ({
@@ -588,7 +618,7 @@ export default function SuttaReader({ sutta }) {
   }, []);
 
   return (
-    <div className="editor-area" onClick={() => {}} style={{ position: 'relative' }}>
+    <div className="editor-area" onClick={() => {}} style={{ position: 'relative' }} ref={scrollAreaRef}>
       {findReplace.visible && (
         <FindReplaceBar
           findText={findReplace.findText}

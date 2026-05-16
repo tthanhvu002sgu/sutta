@@ -21,6 +21,8 @@ export function AppProvider({ children }) {
   const [annotationMode, setAnnotationMode] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [autoScroll, setAutoScroll] = useState(false);
+  const [autoScrollSpeed, setAutoScrollSpeed] = useState(1);
 
   // Initial load
   useEffect(() => {
@@ -196,6 +198,8 @@ export function AppProvider({ children }) {
       view, setView,
       annotationMode, setAnnotationMode,
       showSummary, setShowSummary,
+      autoScroll, setAutoScroll,
+      autoScrollSpeed, setAutoScrollSpeed,
       settings, updateSetting,
       addSutta, deleteSutta, updateSutta,
       addAnnotation, removeAnnotation,
