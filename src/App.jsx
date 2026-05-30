@@ -244,12 +244,13 @@ function AppShell() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span className="toolbar-label">Tốc độ:</span>
                 <input 
-                  type="range" 
+                  type="number" 
+                  className="number-input"
                   min="0.5" 
-                  max="10" 
+                  max="50" 
                   step="0.5"
                   value={autoScrollSpeed}
-                  onChange={(e) => setAutoScrollSpeed(Number(e.target.value))}
+                  onChange={(e) => setAutoScrollSpeed(Math.max(0.1, Number(e.target.value)))}
                   style={{ width: 60 }}
                 />
               </div>
@@ -290,6 +291,36 @@ function AppShell() {
               style={{ border: '1px solid var(--border)', borderRadius: 3 }}
               onClick={() => updateSetting('fontSize', Math.min(28, settings.fontSize + 1))}
             >+</button>
+
+            <div className="toolbar-sep" />
+
+            <span className="toolbar-label">Giao diện:</span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                className={`btn btn-sm ${settings.theme === 'light' || !settings.theme ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => updateSetting('theme', 'light')}
+                title="Giao diện Sáng (Mặc định)"
+                style={{ padding: '4px 8px' }}
+              >
+                ☀️
+              </button>
+              <button
+                className={`btn btn-sm ${settings.theme === 'dark' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => updateSetting('theme', 'dark')}
+                title="Giao diện Tối"
+                style={{ padding: '4px 8px' }}
+              >
+                🌙
+              </button>
+              <button
+                className={`btn btn-sm ${settings.theme === 'sepia' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => updateSetting('theme', 'sepia')}
+                title="Giao diện Sepia"
+                style={{ padding: '4px 8px' }}
+              >
+                📖
+              </button>
+            </div>
 
             <div className="toolbar-sep" />
 

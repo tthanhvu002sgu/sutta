@@ -11,6 +11,10 @@ const DEFAULT_SETTINGS = {
   annotationDisplay: 'popup',
   githubToken: '',
   gistId: '',
+  theme: 'light',
+  lineHeight: 1.5,
+  letterSpacing: 0.01,
+  paddingX: 15,
 };
 
 export function AppProvider({ children }) {
@@ -91,6 +95,12 @@ export function AppProvider({ children }) {
       'Google Sans': "'Google Sans', sans-serif",
     };
     document.documentElement.style.setProperty('--font-family', fontMap[settings.fontFamily] || "'Lora', serif");
+    
+    // Apply layout, typography, and theme CSS properties
+    document.documentElement.style.setProperty('--line-height', settings.lineHeight || 1.5);
+    document.documentElement.style.setProperty('--letter-spacing', (settings.letterSpacing !== undefined ? settings.letterSpacing : 0.01) + 'em');
+    document.documentElement.style.setProperty('--editor-padding-x', (settings.paddingX !== undefined ? settings.paddingX : 15) + '%');
+    document.documentElement.setAttribute('data-theme', settings.theme || 'light');
   }, [settings, isLoaded]);
 
   const activeSutta = suttas.find(s => s.id === activeSuttaId) || null;

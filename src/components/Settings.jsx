@@ -125,6 +125,103 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Giao diện & Bố cục */}
+        <div className="settings-section">
+          <div className="settings-section-title">Giao diện & Bố cục</div>
+
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Chế độ đọc</div>
+              <div className="settings-row-desc">Chọn màu nền và chữ tối ưu giảm mỏi mắt</div>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                className={`btn btn-sm ${settings.theme === 'light' || !settings.theme ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => updateSetting('theme', 'light')}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                ☀️ Sáng
+              </button>
+              <button
+                className={`btn btn-sm ${settings.theme === 'dark' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => updateSetting('theme', 'dark')}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                🌙 Tối
+              </button>
+              <button
+                className={`btn btn-sm ${settings.theme === 'sepia' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => updateSetting('theme', 'sepia')}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                📖 Sepia
+              </button>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Khoảng cách dòng</div>
+              <div className="settings-row-desc">Chiều cao giữa các dòng (Tỷ lệ vàng: 1.5x - 1.6x)</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="range"
+                min="1.2"
+                max="2.0"
+                step="0.1"
+                value={settings.lineHeight !== undefined ? settings.lineHeight : 1.5}
+                onChange={e => updateSetting('lineHeight', parseFloat(e.target.value))}
+                style={{ width: 120, accentColor: 'var(--text)' }}
+                id="setting-line-height"
+              />
+              <span style={{ fontSize: 13, minWidth: 40, textAlign: 'right', fontWeight: 600 }}>
+                {settings.lineHeight !== undefined ? settings.lineHeight : 1.5}x
+              </span>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Khoảng cách chữ</div>
+              <div className="settings-row-desc">Tăng nhẹ khoảng cách chữ giúp đọc lướt (skimming) dễ hơn</div>
+            </div>
+            <select
+              className="select-input"
+              value={settings.letterSpacing !== undefined ? settings.letterSpacing : 0.01}
+              onChange={e => updateSetting('letterSpacing', parseFloat(e.target.value))}
+              id="setting-letter-spacing"
+            >
+              <option value="0">Bình thường (0em)</option>
+              <option value="0.01">Rộng nhẹ (+0.01em - Khuyên dùng)</option>
+              <option value="0.02">Rộng vừa (+0.02em)</option>
+              <option value="0.03">Rộng nhiều (+0.03em)</option>
+            </select>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Độ rộng lề (Whitespace)</div>
+              <div className="settings-row-desc">Lề hai bên văn bản (Khuyên dùng: 10% - 15%)</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="range"
+                min="5"
+                max="25"
+                step="1"
+                value={settings.paddingX !== undefined ? settings.paddingX : 15}
+                onChange={e => updateSetting('paddingX', parseInt(e.target.value))}
+                style={{ width: 120, accentColor: 'var(--text)' }}
+                id="setting-padding-x"
+              />
+              <span style={{ fontSize: 13, minWidth: 40, textAlign: 'right', fontWeight: 600 }}>
+                {settings.paddingX !== undefined ? settings.paddingX : 15}%
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Annotations */}
         <div className="settings-section">
           <div className="settings-section-title">Chú thích</div>
@@ -163,14 +260,17 @@ export default function Settings() {
           <div style={{
             border: '1.5px solid var(--border)',
             borderRadius: 6,
-            padding: '20px 24px',
-            background: 'var(--bg2)',
-            lineHeight: 1.9,
+            padding: '24px 32px',
+            background: 'var(--bg)',
+            color: 'var(--text)',
+            lineHeight: settings.lineHeight !== undefined ? settings.lineHeight : 1.5,
+            letterSpacing: `${settings.letterSpacing !== undefined ? settings.letterSpacing : 0.01}em`,
+            transition: 'all 0.25s ease',
           }}>
             <div style={{ fontFamily: 'Lora, serif', fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12 }}>
               VÍ DỤ NỘI DUNG
             </div>
-            <p style={{ fontFamily: getFontCSS(settings.fontFamily), fontSize: settings.fontSize }}>
+            <p style={{ fontFamily: getFontCSS(settings.fontFamily), fontSize: settings.fontSize, textAlign: 'justify', margin: 0 }}>
               Tâm dẫn đầu các pháp, tâm làm chủ,{' '}
               <span style={{ color: settings.annotationColor, borderBottom: `1.5px dotted ${settings.annotationColor}`, cursor: 'pointer' }}>
                 tâm tạo tác
@@ -265,6 +365,10 @@ export default function Settings() {
                 updateSetting('annotationColor', '#c0392b');
                 updateSetting('fontFamily', 'Lora');
                 updateSetting('fontSize', 17);
+                updateSetting('theme', 'light');
+                updateSetting('lineHeight', 1.5);
+                updateSetting('letterSpacing', 0.01);
+                updateSetting('paddingX', 15);
               }
             }}
           >

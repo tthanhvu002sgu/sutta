@@ -19,12 +19,39 @@
   --font-size: 17px;
 }
 
+[data-theme="dark"] {
+  --bg: #121212;
+  --bg2: #1e1e1e;
+  --bg3: #2a2a2a;
+  --border: #333333;
+  --border-dark: #555555;
+  --text: #E0E0E0;
+  --text-muted: #a0a0a0;
+  --text-light: #666666;
+  --accent: #E0E0E0;
+  --accent-hover: #ffffff;
+}
+
+[data-theme="sepia"] {
+  --bg: #f4ecd8;
+  --bg2: #e8dcbf;
+  --bg3: #dacda3;
+  --border: #c7b58c;
+  --border-dark: #8d7a55;
+  --text: #433422;
+  --text-muted: #7a664e;
+  --text-light: #9a876f;
+  --accent: #433422;
+  --accent-hover: #5c4a34;
+}
+
 html, body, #root {
   height: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-family);
   font-size: var(--font-size);
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
 /* Scrollbar */
@@ -230,7 +257,13 @@ html, body, #root {
 .toolbar-label { font-size: 11px; color: var(--text-muted); letter-spacing: 0.5px; white-space: nowrap; }
 
 /* Editor area */
-.editor-area { flex: 1; overflow-y: auto; padding: 40px 60px; scroll-behavior: smooth; }
+.editor-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 40px var(--editor-padding-x, 15%);
+  scroll-behavior: smooth;
+  transition: padding 0.25s ease;
+}
 .editor-inner { max-width: 780px; margin: 0 auto; }
 
 .sutta-title {
@@ -268,8 +301,11 @@ html, body, #root {
   margin-bottom: 8px;
   color: var(--text-muted);
 }
+.full-editor, .markdown-body p, .sutta-paragraph {
+  line-height: var(--line-height, 1.5) !important;
+  letter-spacing: var(--letter-spacing, 0.01em) !important;
+}
 .sutta-paragraph {
-  line-height: 1.9;
   margin-bottom: 16px;
   text-align: justify;
 }
@@ -586,7 +622,7 @@ input[type="color"] { opacity: 0; width: 0; height: 0; position: absolute; }
   
   /* Layout Spacing */
   .editor-area {
-    padding: 24px 16px;
+    padding: 24px 16px !important;
   }
   .sutta-title {
     font-size: 1.6em;

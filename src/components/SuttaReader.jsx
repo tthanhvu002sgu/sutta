@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useApp } from '../context/AppContext';
 
@@ -502,6 +502,19 @@ function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateS
   );
 }
 
+function calculateReadingTime(sutta) {
+  const html = migrateSuttaToHtml(sutta);
+  if (!html) return { minutes: 0, words: 0 };
+  
+  // Strip HTML tags to get plain text
+  const plainText = html.replace(/<[^>]*>/g, ' ');
+  const words = plainText.trim().split(/\s+/).filter(w => w.length > 0).length;
+  
+  // 200 words per minute is standard silent reading speed
+  const minutes = Math.max(1, Math.round(words / 200));
+  return { minutes, words };
+}
+
 export default function SuttaReader({ sutta }) {
   const { annotationMode, updateSutta, settings, removeAnnotation, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed } = useApp();
   const [tooltip, setTooltip] = useState(null);
@@ -510,10 +523,17 @@ export default function SuttaReader({ sutta }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [findReplace, setFindReplace] = useState({ visible: false, findText: '', focusReplace: false });
   const scrollAreaRef = useRef();
+  
+  // Progress state & scroll timeout
+  const [progress, setProgress] = useState(0);
+  const scrollSaveTimeoutRef = useRef(null);
+
+  const readingTime = useMemo(() => calculateReadingTime(sutta), [sutta]);
 
   useEffect(() => {
     let animationFrameId;
     let lastTime = performance.now();
+    let fractionalScroll = 0;
 
     const scrollLoop = (time) => {
       if (autoScroll && scrollAreaRef.current) {
@@ -521,7 +541,12 @@ export default function SuttaReader({ sutta }) {
         // Speed scaling: 1 = ~10px/s, 5 = ~50px/s, etc.
         const scrollAmount = (autoScrollSpeed * 20 * delta) / 1000;
         
-        scrollAreaRef.current.scrollTop += scrollAmount;
+        fractionalScroll += scrollAmount;
+        if (fractionalScroll >= 1) {
+          const pixelsToScroll = Math.floor(fractionalScroll);
+          scrollAreaRef.current.scrollTop += pixelsToScroll;
+          fractionalScroll -= pixelsToScroll;
+        }
 
         // Auto-stop when reached bottom
         if (scrollAreaRef.current.scrollTop + scrollAreaRef.current.clientHeight >= scrollAreaRef.current.scrollHeight - 1) {
@@ -539,6 +564,54 @@ export default function SuttaReader({ sutta }) {
 
     return () => cancelAnimationFrame(animationFrameId);
   }, [autoScroll, autoScrollSpeed, setAutoScroll]);
+
+  // Restore scroll position when loading/switching sutta
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      const savedScroll = sutta.scrollPosition || 0;
+      
+      const timer = setTimeout(() => {
+        if (scrollAreaRef.current) {
+          scrollAreaRef.current.scrollTop = savedScroll;
+          
+          // Calculate initial progress
+          const scrollTop = scrollAreaRef.current.scrollTop;
+          const scrollHeight = scrollAreaRef.current.scrollHeight;
+          const clientHeight = scrollAreaRef.current.clientHeight;
+          const maxScroll = scrollHeight - clientHeight;
+          const progressVal = maxScroll > 0 ? (scrollTop / maxScroll) * 100 : 0;
+          setProgress(progressVal);
+        }
+      }, 150);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [sutta.id]);
+
+  // Scroll handler for progress bar and auto-bookmarking
+  const handleScroll = useCallback(() => {
+    if (!scrollAreaRef.current) return;
+    
+    const scrollTop = scrollAreaRef.current.scrollTop;
+    const scrollHeight = scrollAreaRef.current.scrollHeight;
+    const clientHeight = scrollAreaRef.current.clientHeight;
+    
+    const maxScroll = scrollHeight - clientHeight;
+    const progressVal = maxScroll > 0 ? (scrollTop / maxScroll) * 100 : 0;
+    setProgress(progressVal);
+    
+    // Save scroll position with a debounce of 800ms to avoid performance hit
+    if (scrollSaveTimeoutRef.current) clearTimeout(scrollSaveTimeoutRef.current);
+    scrollSaveTimeoutRef.current = setTimeout(() => {
+      updateSutta(sutta.id, { scrollPosition: scrollTop });
+    }, 800);
+  }, [sutta.id, updateSutta]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollSaveTimeoutRef.current) clearTimeout(scrollSaveTimeoutRef.current);
+    };
+  }, []);
 
   const handleOpenFindReplace = useCallback((text, focusReplace) => {
     setFindReplace(prev => ({
@@ -618,141 +691,199 @@ export default function SuttaReader({ sutta }) {
   }, []);
 
   return (
-    <div className="editor-area" onClick={() => {}} style={{ position: 'relative' }} ref={scrollAreaRef}>
-      {findReplace.visible && (
-        <FindReplaceBar
-          findText={findReplace.findText}
-          setFindText={(text) => setFindReplace(prev => ({ ...prev, findText: text }))}
-          focusReplace={findReplace.focusReplace}
-          onClose={() => setFindReplace(prev => ({ ...prev, visible: false }))}
-          updateSuttaContent={updateSuttaContent}
-          isEditingSummary={isEditingSummary}
-          summaryContent={sutta.summaryContent}
-          suttaId={sutta.id}
-          updateSutta={updateSutta}
+    <div className="reader-container" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', position: 'relative', background: 'var(--bg)', color: 'var(--text)' }}>
+      {/* Sleek Reading Progress Bar */}
+      <div 
+        style={{
+          width: '100%',
+          height: '4px',
+          background: 'var(--bg3)',
+          zIndex: 90,
+          flexShrink: 0
+        }}
+        id="reading-progress-bar-container"
+      >
+        <div 
+          style={{
+            width: `${progress}%`,
+            height: '100%',
+            background: 'var(--annotation-color)',
+            transition: 'width 0.1s ease-out',
+          }} 
+          id="reading-progress-bar"
         />
-      )}
-      <div className="editor-inner">
-        <h1 className="sutta-title" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {title: e.target.innerText})}>{sutta.title}</h1>
-        {sutta.subtitle && <div className="sutta-subtitle" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {subtitle: e.target.innerText})}>{sutta.subtitle}</div>}
+      </div>
 
-        {showSummary && (
-          <div style={{ marginBottom: 16, padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Bản giải thích (Tóm tắt)</span>
-              <div style={{ display: 'flex', background: 'var(--bg)', borderRadius: 4, padding: 2, border: '1px solid var(--border)' }}>
-                <button
-                  className={`btn btn-sm ${!isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
-                  style={{ border: 'none', borderRadius: 3 }}
-                  onClick={() => setIsEditingSummary(false)}
-                >
-                  Xem
-                </button>
-                <button
-                  className={`btn btn-sm ${isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
-                  style={{ border: 'none', borderRadius: 3 }}
-                  onClick={() => setIsEditingSummary(true)}
-                >
-                  Sửa
-                </button>
-              </div>
-            </div>
-            <button className="btn btn-sm" onClick={() => setShowSummary(false)}>Đóng (ESC)</button>
+      <div className="editor-area" onClick={() => {}} onScroll={handleScroll} style={{ position: 'relative', flex: 1, overflowY: 'auto' }} ref={scrollAreaRef}>
+        {findReplace.visible && (
+          <FindReplaceBar
+            findText={findReplace.findText}
+            setFindText={(text) => setFindReplace(prev => ({ ...prev, findText: text }))}
+            focusReplace={findReplace.focusReplace}
+            onClose={() => setFindReplace(prev => ({ ...prev, visible: false }))}
+            updateSuttaContent={updateSuttaContent}
+            isEditingSummary={isEditingSummary}
+            summaryContent={sutta.summaryContent}
+            suttaId={sutta.id}
+            updateSutta={updateSutta}
+          />
+        )}
+        <div className="editor-inner">
+          <h1 className="sutta-title" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {title: e.target.innerText})}>{sutta.title}</h1>
+          {sutta.subtitle && <div className="sutta-subtitle" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {subtitle: e.target.innerText})}>{sutta.subtitle}</div>}
+
+          {/* Estimated Reading Time & Word Count Metadata Bar */}
+          <div 
+            className="sutta-metadata" 
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
+              fontSize: '13px',
+              color: 'var(--text-muted)',
+              marginBottom: '28px',
+              marginTop: sutta.subtitle ? '-16px' : '0px',
+              borderBottom: '1px dashed var(--border)',
+              paddingBottom: '12px',
+              flexWrap: 'wrap',
+            }}
+            id="sutta-metadata-bar"
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              ⏱️ <strong>Thời gian đọc:</strong> ~{readingTime.minutes} phút
+            </span>
+            <span style={{ color: 'var(--border)' }}>|</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              📝 <strong>Độ dài:</strong> {readingTime.words.toLocaleString()} từ
+            </span>
+            {sutta.scrollPosition > 10 && (
+              <>
+                <span style={{ color: 'var(--border)' }}>|</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--annotation-color)', fontWeight: 500 }}>
+                  🔖 <strong>Đang đọc dở</strong> (Khôi phục tự động)
+                </span>
+              </>
+            )}
           </div>
+
+          {showSummary && (
+            <div style={{ marginBottom: 16, padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Bản giải thích (Tóm tắt)</span>
+                <div style={{ display: 'flex', background: 'var(--bg)', borderRadius: 4, padding: 2, border: '1px solid var(--border)' }}>
+                  <button
+                    className={`btn btn-sm ${!isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ border: 'none', borderRadius: 3 }}
+                    onClick={() => setIsEditingSummary(false)}
+                  >
+                    Xem
+                  </button>
+                  <button
+                    className={`btn btn-sm ${isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ border: 'none', borderRadius: 3 }}
+                    onClick={() => setIsEditingSummary(true)}
+                  >
+                    Sửa
+                  </button>
+                </div>
+              </div>
+              <button className="btn btn-sm" onClick={() => setShowSummary(false)}>Đóng (ESC)</button>
+            </div>
+          )}
+
+          {showSummary ? (
+            isEditingSummary ? (
+              <textarea
+                className="form-textarea"
+                style={{ width: '100%', minHeight: '400px', padding: 16, fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, border: 'none', background: 'transparent', resize: 'vertical' }}
+                placeholder="Dán bản giải thích / tóm tắt từ AI vào đây (Hỗ trợ Markdown)..."
+                value={sutta.summaryContent || ''}
+                onChange={e => updateSutta(sutta.id, { summaryContent: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.ctrlKey && e.key === 'h') {
+                    e.preventDefault();
+                    const selStart = e.target.selectionStart;
+                    const selEnd = e.target.selectionEnd;
+                    const selText = e.target.value.substring(selStart, selEnd);
+                    handleOpenFindReplace(selText, false);
+                  }
+                  if (e.ctrlKey && e.key === 'd') {
+                    e.preventDefault();
+                    const selStart = e.target.selectionStart;
+                    const selEnd = e.target.selectionEnd;
+                    const selText = e.target.value.substring(selStart, selEnd);
+                    handleOpenFindReplace(selText, true);
+                  }
+                }}
+                autoFocus
+              />
+            ) : (
+              <div className="markdown-body" style={{ padding: '0 16px', fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, minHeight: 400 }}>
+                {sutta.summaryContent ? (
+                  <ReactMarkdown>{sutta.summaryContent}</ReactMarkdown>
+                ) : (
+                  <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: 40 }}>
+                    Chưa có nội dung. Bấm "Sửa" để dán bản giải thích vào đây.
+                  </div>
+                )}
+              </div>
+            )
+          ) : (
+            <FullEditor
+              sutta={sutta}
+              isMobile={isMobile}
+              annotationMode={annotationMode}
+              onShowPopup={setPopup}
+              onOpenFindReplace={handleOpenFindReplace}
+              onShowTooltip={(data) => {
+                if (!isPopupMode) {
+                  if (data && data.pinned) {
+                    // If in sidebar mode and clicked, maybe highlight the sidebar item instead of showing popup
+                    const sidebarItem = document.getElementById(`sidebar-anno-${data.annotationId}`);
+                    if (sidebarItem) {
+                      sidebarItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                      const originalBg = sidebarItem.style.background;
+                      sidebarItem.style.background = 'var(--bg3)';
+                      setTimeout(() => sidebarItem.style.background = originalBg, 1500);
+                    }
+                  }
+                  return;
+                }
+                if (!data && tooltip && tooltip.pinned) return;
+                setTooltip(data);
+              }}
+              updateSuttaContent={updateSuttaContent}
+            />
+          )}
+        </div>
+
+        {tooltip && sutta.annotations && sutta.annotations[tooltip.annotationId] && (
+          <AnnotationTooltip
+            annotation={sutta.annotations[tooltip.annotationId]}
+            x={tooltip.x}
+            y={tooltip.y}
+            pinned={tooltip.pinned}
+            onClose={() => setTooltip(null)}
+            onEdit={() => { 
+              setPopup({ annotationId: tooltip.annotationId, initialWord: tooltip.word, target: tooltip.target }); 
+              setTooltip(null); 
+            }}
+            annotationId={tooltip.annotationId}
+            suttaId={sutta.id}
+            onRemoveMark={handleRemoveMark}
+          />
         )}
 
-        {showSummary ? (
-          isEditingSummary ? (
-            <textarea
-              className="form-textarea"
-              style={{ width: '100%', minHeight: '400px', padding: 16, fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, border: 'none', background: 'transparent', resize: 'vertical' }}
-              placeholder="Dán bản giải thích / tóm tắt từ AI vào đây (Hỗ trợ Markdown)..."
-              value={sutta.summaryContent || ''}
-              onChange={e => updateSutta(sutta.id, { summaryContent: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.ctrlKey && e.key === 'h') {
-                  e.preventDefault();
-                  const selStart = e.target.selectionStart;
-                  const selEnd = e.target.selectionEnd;
-                  const selText = e.target.value.substring(selStart, selEnd);
-                  handleOpenFindReplace(selText, false);
-                }
-                if (e.ctrlKey && e.key === 'd') {
-                  e.preventDefault();
-                  const selStart = e.target.selectionStart;
-                  const selEnd = e.target.selectionEnd;
-                  const selText = e.target.value.substring(selStart, selEnd);
-                  handleOpenFindReplace(selText, true);
-                }
-              }}
-              autoFocus
-            />
-          ) : (
-            <div className="markdown-body" style={{ padding: '0 16px', fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, minHeight: 400 }}>
-              {sutta.summaryContent ? (
-                <ReactMarkdown>{sutta.summaryContent}</ReactMarkdown>
-              ) : (
-                <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: 40 }}>
-                  Chưa có nội dung. Bấm "Sửa" để dán bản giải thích vào đây.
-                </div>
-              )}
-            </div>
-          )
-        ) : (
-          <FullEditor
-            sutta={sutta}
-            isMobile={isMobile}
-            annotationMode={annotationMode}
-            onShowPopup={setPopup}
-            onOpenFindReplace={handleOpenFindReplace}
-            onShowTooltip={(data) => {
-              if (!isPopupMode) {
-                if (data && data.pinned) {
-                  // If in sidebar mode and clicked, maybe highlight the sidebar item instead of showing popup
-                  const sidebarItem = document.getElementById(`sidebar-anno-${data.annotationId}`);
-                  if (sidebarItem) {
-                    sidebarItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    const originalBg = sidebarItem.style.background;
-                    sidebarItem.style.background = 'var(--bg3)';
-                    setTimeout(() => sidebarItem.style.background = originalBg, 1500);
-                  }
-                }
-                return;
-              }
-              if (!data && tooltip && tooltip.pinned) return;
-              setTooltip(data);
-            }}
-            updateSuttaContent={updateSuttaContent}
+        {popup && (
+          <AnnotationPopup
+            annotationId={popup.annotationId}
+            initialWord={popup.initialWord}
+            suttaId={sutta.id}
+            onClose={() => setPopup(null)}
+            onRemoveMark={handleRemoveMark}
           />
         )}
       </div>
-
-      {tooltip && sutta.annotations && sutta.annotations[tooltip.annotationId] && (
-        <AnnotationTooltip
-          annotation={sutta.annotations[tooltip.annotationId]}
-          x={tooltip.x}
-          y={tooltip.y}
-          pinned={tooltip.pinned}
-          onClose={() => setTooltip(null)}
-          onEdit={() => { 
-            setPopup({ annotationId: tooltip.annotationId, initialWord: tooltip.word, target: tooltip.target }); 
-            setTooltip(null); 
-          }}
-          annotationId={tooltip.annotationId}
-          suttaId={sutta.id}
-          onRemoveMark={handleRemoveMark}
-        />
-      )}
-
-      {popup && (
-        <AnnotationPopup
-          annotationId={popup.annotationId}
-          initialWord={popup.initialWord}
-          suttaId={sutta.id}
-          onClose={() => setPopup(null)}
-          onRemoveMark={handleRemoveMark}
-        />
-      )}
     </div>
   );
 }
