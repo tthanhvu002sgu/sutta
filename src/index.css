@@ -656,3 +656,285 @@ input[type="color"] { opacity: 0; width: 0; height: 0; position: absolute; }
   }
 }
 
+/* Podcast Player Overlay & Controls */
+.podcast-player-overlay {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2000;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.podcast-player-card {
+  background: var(--bg2);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 22px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.podcast-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.podcast-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.podcast-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.podcast-badge.main-badge {
+  color: var(--annotation-color);
+  background: rgba(192, 57, 43, 0.1);
+  border: 1px solid rgba(192, 57, 43, 0.2);
+}
+
+.podcast-badge.cache-badge {
+  background: rgba(39, 174, 96, 0.12);
+  color: #27ae60;
+  border: 1px solid rgba(39, 174, 96, 0.3);
+}
+
+.podcast-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 15px;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.podcast-close-btn:hover {
+  color: var(--text);
+  background: var(--bg3);
+}
+
+.podcast-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-family);
+}
+
+.podcast-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.podcast-status.loading {
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.podcast-status.error {
+  background: rgba(231, 76, 60, 0.1);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+  color: #c0392b;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.podcast-alert.error {
+  font-size: 12px;
+  padding: 8px 12px;
+  background: rgba(231, 76, 60, 0.1);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+  color: #c0392b;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.podcast-timeline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.time-text {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: monospace;
+  color: var(--text-muted);
+  min-width: 38px;
+}
+
+.podcast-slider {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  accent-color: var(--annotation-color);
+  cursor: pointer;
+  background: var(--bg3);
+}
+
+.podcast-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Play/Pause Main Button */
+.podcast-play-btn {
+  background: var(--annotation-color);
+  color: #ffffff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(192, 57, 43, 0.25);
+  transition: all 0.2s ease;
+}
+
+.podcast-play-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(192, 57, 43, 0.35);
+}
+
+.podcast-play-btn.playing {
+  background: var(--accent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Speed options chips */
+.podcast-speed-options {
+  display: flex;
+  gap: 3px;
+  background: var(--bg3);
+  padding: 3px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+}
+
+.speed-chip {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.speed-chip.active {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Volume Slider */
+.podcast-volume {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.volume-icon {
+  font-size: 13px;
+}
+
+.volume-slider {
+  width: 55px;
+  height: 4px;
+  accent-color: var(--text-muted);
+  cursor: pointer;
+}
+
+/* Secondary Action Buttons */
+.podcast-secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.podcast-action-btn {
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.podcast-action-btn:hover {
+  background: var(--bg);
+  border-color: var(--border-dark);
+}
+
+.podcast-action-btn.danger {
+  color: #c0392b;
+  border-color: rgba(231, 76, 60, 0.3);
+  background: rgba(231, 76, 60, 0.08);
+}
+
+.podcast-action-btn.danger:hover {
+  background: rgba(231, 76, 60, 0.18);
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--annotation-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+
+

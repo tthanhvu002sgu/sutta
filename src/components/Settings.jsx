@@ -7,6 +7,7 @@ const FONT_SIZES = [13, 14, 15, 16, 17, 18, 19, 20, 22, 24];
 export default function Settings() {
   const { suttas, settings, updateSetting, restoreData, syncToGist, syncFromGist } = useApp();
   const [syncStatus, setSyncStatus] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
   const colorRef = { current: null };
 
   const handleExportData = () => {
@@ -281,6 +282,117 @@ export default function Settings() {
               </span>
               , an lạc sẽ theo sau.
             </p>
+          </div>
+        </div>
+
+        {/* Gemini Voice AI & System Prompt */}
+        <div className="settings-section">
+          <div className="settings-section-title">🎙 Gemini Voice AI & Podcast</div>
+
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Gemini API Key</div>
+              <div className="settings-row-desc">
+                API Key miễn phí lấy từ <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>Google AI Studio</a>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                className="text-input"
+                value={settings.geminiApiKey || ''}
+                onChange={e => updateSetting('geminiApiKey', e.target.value)}
+                placeholder="AIzaSy..."
+                style={{ width: '220px' }}
+              />
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => setShowApiKey(!showApiKey)}
+              >
+                {showApiKey ? 'Ẩn' : 'Hiện'}
+              </button>
+            </div>
+          </div>
+
+          <div className="settings-row" style={{ alignItems: 'flex-start' }}>
+            <div className="settings-row-info">
+              <div className="settings-row-label">System Prompt (Giọng đọc & Ngữ cảnh)</div>
+              <div className="settings-row-desc">
+                Cấu hình giọng đọc miền Nam, âm điệu từ bi, thành kính cho kinh văn Phật giáo
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                style={{ marginTop: 8, fontSize: 12 }}
+                onClick={() => updateSetting(
+                  'geminiSystemPrompt',
+                  'Bạn là người thuyết minh và giảng giải kinh văn Phật giáo với chất giọng miền Nam truyền cảm, ấm áp, từ tốn, từ bi và trang nghiêm. Hãy đọc rõ ràng, giữ nhịp điệu thong thả, thành kính và tự nhiên đối meo với các thuật ngữ Phật học.'
+                )}
+              >
+                ↺ Đặt mặc định giọng miền Nam
+              </button>
+            </div>
+            <textarea
+              className="form-textarea"
+              style={{ width: '320px', height: '100px', fontSize: 13 }}
+              value={settings.geminiSystemPrompt || ''}
+              onChange={e => updateSetting('geminiSystemPrompt', e.target.value)}
+              placeholder="Nhập yêu cầu giọng đọc và phong cách..."
+            />
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Model chính (Primary Model)</div>
+              <div className="settings-row-desc">Mô hình Gemini Voice được ưu tiên gọi đầu tiên</div>
+            </div>
+            <select
+              className="select-input"
+              value={settings.geminiTtsModel || 'gemini-2.0-flash'}
+              onChange={e => updateSetting('geminiTtsModel', e.target.value)}
+            >
+              <option value="gemini-2.0-flash">gemini-2.0-flash (Ổn định nhất)</option>
+              <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+              <option value="gemini-3.1-flash-tts-preview">gemini-3.1-flash-tts-preview</option>
+              <option value="gemini-2.5-flash-preview-tts">gemini-2.5-flash-preview-tts</option>
+            </select>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Model dự phòng (Fallback Model)</div>
+              <div className="settings-row-desc">Tự động xoay vòng sang model này nếu model chính bận hoặc nghẽn API</div>
+            </div>
+            <select
+              className="select-input"
+              value={settings.geminiTtsFallbackModel || 'gemini-2.5-flash'}
+              onChange={e => updateSetting('geminiTtsFallbackModel', e.target.value)}
+            >
+              <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+              <option value="gemini-2.0-flash">gemini-2.0-flash (Ổn định nhất)</option>
+              <option value="gemini-3.1-flash-tts-preview">gemini-3.1-flash-tts-preview</option>
+              <option value="gemini-2.5-flash-preview-tts">gemini-2.5-flash-preview-tts</option>
+            </select>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Âm điệu giọng đọc (Voice Tone)</div>
+              <div className="settings-row-desc">Chọn màu giọng đọc truyền cảm của Gemini</div>
+            </div>
+            <select
+              className="select-input"
+              value={settings.geminiVoice || 'Enceladus'}
+              onChange={e => updateSetting('geminiVoice', e.target.value)}
+            >
+              <option value="Enceladus">Enceladus (Trầm lắng, nghiêm nghị, tin tức)</option>
+              <option value="Charon">Charon (Trầm ấm, trang nghiêm)</option>
+              <option value="Puck">Puck (Truyền cảm, linh hoạt)</option>
+              <option value="Kore">Kore (Nữ ấm áp, từ bi)</option>
+              <option value="Fenrir">Fenrir (Nam mạnh mẽ, dũng mãnh)</option>
+              <option value="Aoede">Aoede (Nữ nhẹ nhàng, thanh thoát)</option>
+            </select>
           </div>
         </div>
 

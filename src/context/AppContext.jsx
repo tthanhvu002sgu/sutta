@@ -15,6 +15,11 @@ const DEFAULT_SETTINGS = {
   lineHeight: 1.5,
   letterSpacing: 0.01,
   paddingX: 15,
+  geminiApiKey: '',
+  geminiTtsModel: 'gemini-3.1-flash-tts-preview',
+  geminiTtsFallbackModel: 'gemini-2.5-flash-preview-tts',
+  geminiSystemPrompt: 'Bạn là người thuyết minh và giảng giải kinh văn Phật giáo với chất giọng miền Nam truyền cảm, ấm áp, từ tốn, từ bi và trang nghiêm. Hãy đọc rõ ràng, giữ nhịp điệu thong thả, thành kính và tự nhiên đối với các thuật ngữ Phật học.',
+  geminiVoice: 'Puck',
 };
 
 export function AppProvider({ children }) {

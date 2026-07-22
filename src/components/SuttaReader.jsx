@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { get as getStore, set as setStore, del as delStore } from 'idb-keyval';
 import { useApp } from '../context/AppContext';
+import PodcastPlayer from './PodcastPlayer';
+import { generateGeminiAudio } from '../services/geminiTts';
 
 function migrateText(text, annotations, blockId) {
   if (!text) return '';
@@ -516,7 +519,7 @@ function calculateReadingTime(sutta) {
 }
 
 export default function SuttaReader({ sutta }) {
-  const { annotationMode, updateSutta, settings, removeAnnotation, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed } = useApp();
+  const { annotationMode, updateSutta, settings, removeAnnotation, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed, setView } = useApp();
   const [tooltip, setTooltip] = useState(null);
   const [popup, setPopup] = useState(null);
   const [isEditingSummary, setIsEditingSummary] = useState(false);
@@ -524,9 +527,166 @@ export default function SuttaReader({ sutta }) {
   const [findReplace, setFindReplace] = useState({ visible: false, findText: '', focusReplace: false });
   const scrollAreaRef = useRef();
   
+  // Podcast Voice State
+  const [podcastState, setPodcastState] = useState({
+    open: false,
+    loading: false,
+    audioUrl: null,
+    title: '',
+    statusMessage: '',
+    usedModel: '',
+    isFallbackUsed: false,
+    isCached: false,
+    error: null,
+  });
+
+  const [hasCachedAudio, setHasCachedAudio] = useState(false);
+  
+  // Check if audio exists in IndexedDB for current Sutta
+  useEffect(() => {
+    let isMounted = true;
+    async function checkAudioCache() {
+      try {
+        const cachedBlob = await getStore(`sutta-audio-${sutta.id}`);
+        if (isMounted) {
+          setHasCachedAudio(!!cachedBlob);
+        }
+      } catch (_) {
+        if (isMounted) setHasCachedAudio(false);
+      }
+    }
+    checkAudioCache();
+    return () => { isMounted = false; };
+  }, [sutta.id]);
+  
   // Progress state & scroll timeout
   const [progress, setProgress] = useState(0);
   const scrollSaveTimeoutRef = useRef(null);
+
+  const handleStartPodcast = async (forceRegenerate = false) => {
+    const cacheKey = `sutta-audio-${sutta.id}`;
+
+    // 1. Check local IndexedDB cache unless user explicitly requested re-generation
+    if (!forceRegenerate) {
+      try {
+        const cachedBlob = await getStore(cacheKey);
+        if (cachedBlob) {
+          const audioUrl = URL.createObjectURL(cachedBlob);
+          setPodcastState({
+            open: true,
+            loading: false,
+            audioUrl,
+            title: sutta.title,
+            statusMessage: '',
+            usedModel: 'Bản lưu IndexedDB',
+            isFallbackUsed: false,
+            isCached: true,
+            error: null,
+          });
+          setHasCachedAudio(true);
+          return;
+        }
+      } catch (err) {
+        console.warn('Lỗi đọc bản lưu audio:', err);
+      }
+    }
+
+    // 2. If not cached or regenerating: Call Gemini API
+    if (!settings.geminiApiKey) {
+      if (window.confirm('Vui lòng cấu hình Gemini API Key trước. Bạn có muốn chuyển sang màn hình Cài đặt ngay bây giờ không?')) {
+        setView('settings');
+      }
+      return;
+    }
+
+    let textToRead = '';
+    if (showSummary && sutta.summaryContent) {
+      textToRead = sutta.summaryContent.replace(/<[^>]*>/g, ' ').replace(/[#*`_-]/g, ' ');
+    } else {
+      const html = migrateSuttaToHtml(sutta);
+      textToRead = html.replace(/<[^>]*>/g, ' ');
+    }
+
+    textToRead = textToRead.trim();
+    if (!textToRead) {
+      alert('Nội dung bài viết trống, không thể tạo giọng đọc.');
+      return;
+    }
+
+    if (textToRead.length > 8000) {
+      textToRead = textToRead.slice(0, 8000);
+    }
+
+    setPodcastState({
+      open: true,
+      loading: true,
+      audioUrl: null,
+      title: sutta.title,
+      statusMessage: 'Đang kết nối Gemini Voice API...',
+      usedModel: '',
+      isFallbackUsed: false,
+      isCached: false,
+      error: null,
+    });
+
+    try {
+      const res = await generateGeminiAudio({
+        text: textToRead,
+        apiKey: settings.geminiApiKey,
+        primaryModel: settings.geminiTtsModel || 'gemini-2.0-flash',
+        fallbackModel: settings.geminiTtsFallbackModel || 'gemini-2.5-flash',
+        systemPrompt: settings.geminiSystemPrompt,
+        voice: settings.geminiVoice || 'Enceladus',
+        onStatusUpdate: (msg) => {
+          setPodcastState((prev) => ({ ...prev, statusMessage: msg }));
+        },
+      });
+
+      // 3. Save generated audio Blob to IndexedDB
+      try {
+        await setStore(cacheKey, res.blob);
+        setHasCachedAudio(true);
+      } catch (saveErr) {
+        console.warn('Không thể lưu file audio vào IndexedDB:', saveErr);
+      }
+
+      setPodcastState({
+        open: true,
+        loading: false,
+        audioUrl: res.audioUrl,
+        title: sutta.title,
+        statusMessage: '',
+        usedModel: res.usedModel,
+        isFallbackUsed: res.isFallbackUsed,
+        isCached: true,
+        error: null,
+      });
+    } catch (err) {
+      setPodcastState({
+        open: true,
+        loading: false,
+        audioUrl: null,
+        title: sutta.title,
+        statusMessage: '',
+        usedModel: '',
+        isFallbackUsed: false,
+        isCached: false,
+        error: err.message,
+      });
+    }
+  };
+
+  const handleDeletePodcastCache = async () => {
+    if (!window.confirm('Bạn có chắc muốn xóa file audio đã lưu cho bài đọc này?')) return;
+    try {
+      await delStore(`sutta-audio-${sutta.id}`);
+      setHasCachedAudio(false);
+      setPodcastState((prev) => ({ ...prev, open: false, audioUrl: null, isCached: false }));
+      alert('Đã xóa bản lưu audio thành công.');
+    } catch (err) {
+      alert('Lỗi khi xóa bản lưu: ' + err.message);
+    }
+  };
 
   const readingTime = useMemo(() => calculateReadingTime(sutta), [sutta]);
 
@@ -752,10 +912,28 @@ export default function SuttaReader({ sutta }) {
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               ⏱️ <strong>Thời gian đọc:</strong> ~{readingTime.minutes} phút
             </span>
-            <span style={{ color: 'var(--border)' }}>|</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               📝 <strong>Độ dài:</strong> {readingTime.words.toLocaleString()} từ
             </span>
+            <button
+              className={`btn btn-sm ${hasCachedAudio ? 'btn-ghost' : 'btn-primary'}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px',
+                fontSize: '12px',
+                fontWeight: 600,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                border: hasCachedAudio ? '1.5px solid var(--annotation-color)' : 'none',
+                color: hasCachedAudio ? 'var(--annotation-color)' : undefined,
+              }}
+              onClick={() => handleStartPodcast(false)}
+              title={hasCachedAudio ? 'Phát file Audio đã lưu từ IndexedDB' : 'Chuyển đổi bài đọc thành Podcast giọng đọc Gemini AI'}
+            >
+              {hasCachedAudio ? '▶ Nghe Podcast (Đã lưu)' : '🎙 Tạo Podcast / Đọc Voice'}
+            </button>
             {sutta.scrollPosition > 10 && (
               <>
                 <span style={{ color: 'var(--border)' }}>|</span>
@@ -881,6 +1059,23 @@ export default function SuttaReader({ sutta }) {
             suttaId={sutta.id}
             onClose={() => setPopup(null)}
             onRemoveMark={handleRemoveMark}
+          />
+        )}
+
+        {podcastState.open && (
+          <PodcastPlayer
+            title={podcastState.title}
+            audioUrl={podcastState.audioUrl}
+            isLoading={podcastState.loading}
+            statusMessage={podcastState.statusMessage}
+            usedModel={podcastState.usedModel}
+            isFallbackUsed={podcastState.isFallbackUsed}
+            isCached={podcastState.isCached}
+            error={podcastState.error}
+            onClose={() => setPodcastState((prev) => ({ ...prev, open: false }))}
+            onRetry={() => handleStartPodcast(false)}
+            onRegenerate={() => handleStartPodcast(true)}
+            onDeleteCache={handleDeletePodcastCache}
           />
         )}
       </div>
