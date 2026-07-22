@@ -1,6 +1,7 @@
 /**
  * Gemini Voice & TTS API Service
- * Handles audio generation with fast health check and fallback strategy
+ * Handles long text chunking, PCM audio concatenation, live progress tracking,
+ * health checks, and fallback model strategy.
  */
 
 function base64ToUint8Array(base64) {
@@ -61,8 +62,71 @@ function writeString(view, offset, string) {
 }
 
 /**
+ * Concatenates multiple Uint8Array PCM byte arrays into a single Uint8Array.
+ */
+function concatenatePcmArrays(pcmArrays) {
+  let totalLength = 0;
+  for (const arr of pcmArrays) {
+    totalLength += arr.length;
+  }
+  const combined = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const arr of pcmArrays) {
+    combined.set(arr, offset);
+    offset += arr.length;
+  }
+  return combined;
+}
+
+/**
+ * Splits long text into manageable chunks at sentence boundaries (target ~9000 characters / ~3000 tokens per chunk)
+ * to prevent Gemini API output token cutoff while minimizing API calls.
+ */
+function splitTextIntoChunks(text, targetChunkSize = 9000) {
+  if (!text || text.length <= targetChunkSize) {
+    return [text];
+  }
+
+  const paragraphs = text.split(/\n+/);
+  const chunks = [];
+  let currentChunk = '';
+
+  for (const para of paragraphs) {
+    if (!para.trim()) continue;
+
+    if (currentChunk.length + para.length <= targetChunkSize) {
+      currentChunk += (currentChunk ? '\n' : '') + para;
+    } else {
+      if (currentChunk) {
+        chunks.push(currentChunk.trim());
+        currentChunk = '';
+      }
+
+      if (para.length > targetChunkSize) {
+        const sentences = para.match(/[^.!?]+[.!?]+|\S+/g) || [para];
+        for (const sentence of sentences) {
+          if (currentChunk.length + sentence.length <= targetChunkSize) {
+            currentChunk += (currentChunk ? ' ' : '') + sentence;
+          } else {
+            if (currentChunk) chunks.push(currentChunk.trim());
+            currentChunk = sentence;
+          }
+        }
+      } else {
+        currentChunk = para;
+      }
+    }
+  }
+
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+
+  return chunks.length > 0 ? chunks : [text];
+}
+
+/**
  * Quick Pre-flight Health Check to test if a model is active and responding
- * before sending a large text payload.
  */
 async function pingModelHealth(model, apiKey, timeoutMs = 3500) {
   const controller = new AbortController();
@@ -98,13 +162,13 @@ async function pingModelHealth(model, apiKey, timeoutMs = 3500) {
 }
 
 /**
- * Call Gemini API with fast pre-flight check and model fallback strategy
+ * Call Gemini API with automated long-text chunking & seamless PCM audio concatenation
  */
 export async function generateGeminiAudio({
   text,
   apiKey,
-  primaryModel = 'gemini-2.0-flash',
-  fallbackModel = 'gemini-2.5-flash',
+  primaryModel = 'gemini-2.0-flash-exp',
+  fallbackModel = 'gemini-2.0-flash',
   systemPrompt = '',
   voice = 'Enceladus',
   onStatusUpdate = () => {},
@@ -117,27 +181,29 @@ export async function generateGeminiAudio({
     throw new Error('Không có nội dung văn bản để chuyển thành giọng nói.');
   }
 
-  // Candidate models to attempt
+  // Candidate models
   const candidateModels = [
     primaryModel,
     fallbackModel,
+    'gemini-2.0-flash-exp',
     'gemini-2.0-flash',
     'gemini-2.5-flash',
-    'gemini-1.5-flash',
   ].filter(Boolean);
 
   const modelsToTry = [...new Set(candidateModels)];
 
-  // Fast pre-flight check to find a 100% active model without wasting time on full payloads
-  onStatusUpdate('⚡ Đang siêu kiểm tra (Quick Health Check) trạng thái hoạt động của các mô hình...');
+  // Stage 1: Split text into chunks (~3000 tokens / 9000 chars) to prevent token cutoff
+  const textChunks = splitTextIntoChunks(text, 9000);
+  console.log(`Đã phân đoạn văn bản thành ${textChunks.length} phần.`);
+
+  onStatusUpdate({ percent: 10, message: `Kiểm tra mô hình API (${textChunks.length} đoạn văn bản)...` });
 
   let workingModel = null;
   let isFallbackUsed = false;
-  let healthLogs = [];
 
   for (let i = 0; i < modelsToTry.length; i++) {
     const candidate = modelsToTry[i];
-    onStatusUpdate(`🔍 Đang kiểm tra nhanh mô hình ${candidate}...`);
+    onStatusUpdate({ percent: 10 + (i + 1) * 3, message: `Kiểm tra kết nối mô hình ${candidate}...` });
 
     try {
       await pingModelHealth(candidate, apiKey.trim(), 3500);
@@ -146,69 +212,97 @@ export async function generateGeminiAudio({
       break;
     } catch (pingErr) {
       console.warn(`Health check thất bại với ${candidate}:`, pingErr.message);
-      healthLogs.push(`${candidate}: ${pingErr.message}`);
     }
   }
 
-  // If no model passed quick health check, try full payload on first candidate as fallback
   const targetModel = workingModel || modelsToTry[0];
-  if (isFallbackUsed) {
-    onStatusUpdate(`⚡ Mô hình chính bận. Đã tự động xoay vòng sang mô hình sẵn sàng: ${targetModel}...`);
-  } else {
-    onStatusUpdate(`🎙 Mô hình ${targetModel} đã sẵn sàng 100%. Đang khởi tạo Podcast...`);
-  }
+  const pcmChunkList = [];
+  let detectedSampleRate = 24000;
 
-  try {
-    const audioResult = await callGeminiAudioApi({
-      text,
-      apiKey: apiKey.trim(),
-      model: targetModel,
-      systemPrompt,
-      voice,
+  // Stage 2: Sequentially generate audio for each chunk
+  for (let i = 0; i < textChunks.length; i++) {
+    const currentChunkText = textChunks[i];
+    const chunkPercent = Math.round(20 + ((i + 1) / textChunks.length) * 70);
+
+    onStatusUpdate({
+      percent: chunkPercent,
+      message: `Đang đọc AI đoạn ${i + 1}/${textChunks.length}...`,
     });
 
-    return {
-      ...audioResult,
-      usedModel: targetModel,
-      isFallbackUsed,
-    };
-  } catch (err) {
-    // If targetModel fails full generation, try next available models
-    for (const altModel of modelsToTry) {
-      if (altModel === targetModel) continue;
-      onStatusUpdate(`Tự động thử lại với mô hình ${altModel}...`);
-      try {
-        const result = await callGeminiAudioApi({
-          text,
-          apiKey: apiKey.trim(),
-          model: altModel,
-          systemPrompt,
-          voice,
-        });
-        return {
-          ...result,
-          usedModel: altModel,
-          isFallbackUsed: true,
-        };
-      } catch (_) {
-        // continue
+    try {
+      const chunkResult = await callGeminiAudioApi({
+        text: currentChunkText,
+        apiKey: apiKey.trim(),
+        model: targetModel,
+        systemPrompt: i === 0 ? systemPrompt : '', // apply prompt context on main chunk
+        voice,
+      });
+
+      pcmChunkList.push(chunkResult.rawBytes);
+      if (chunkResult.sampleRate) {
+        detectedSampleRate = chunkResult.sampleRate;
+      }
+    } catch (err) {
+      console.warn(`Lỗi khi tạo đoạn ${i + 1} với mô hình ${targetModel}:`, err);
+      // Fallback to alternative model if current chunk fails
+      let recovered = false;
+      for (const altModel of modelsToTry) {
+        if (altModel === targetModel) continue;
+        try {
+          const chunkResult = await callGeminiAudioApi({
+            text: currentChunkText,
+            apiKey: apiKey.trim(),
+            model: altModel,
+            systemPrompt: i === 0 ? systemPrompt : '',
+            voice,
+          });
+          pcmChunkList.push(chunkResult.rawBytes);
+          if (chunkResult.sampleRate) detectedSampleRate = chunkResult.sampleRate;
+          recovered = true;
+          isFallbackUsed = true;
+          break;
+        } catch (_) {}
+      }
+      if (!recovered) {
+        throw new Error(`Lỗi tại đoạn ${i + 1}/${textChunks.length}: ${err.message}`);
       }
     }
-    throw new Error(`Tất cả mô hình đều lỗi. Nhật ký: ${healthLogs.join(' | ')} - ${err.message}`);
   }
+
+  // Stage 3: Concatenate all PCM chunks seamlessly
+  onStatusUpdate({ percent: 95, message: 'Đang nối các đoạn Audio & tạo file hoàn chỉnh...' });
+
+  const finalPcmBytes = concatenatePcmArrays(pcmChunkList);
+  const finalBlob = pcmToWavBlob(finalPcmBytes, detectedSampleRate, 1);
+  const audioUrl = URL.createObjectURL(finalBlob);
+
+  onStatusUpdate({ percent: 100, message: 'Hoàn tất!' });
+
+  return {
+    audioUrl,
+    blob: finalBlob,
+    mimeType: finalBlob.type,
+    usedModel: targetModel,
+    isFallbackUsed,
+    chunksCount: textChunks.length,
+  };
 }
 
 async function callGeminiAudioApi({ text, apiKey, model, systemPrompt, voice }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-  // Newsletter style directive for solemn, serious, news-like delivery
-  const styleDirective = '[STYLE / PHONG CÁCH GIỌNG ĐỌC]: Newsletter (Đọc với tông giọng nghiêm nghị, đĩnh đạc, từ tốn, trang trọng và rõ ràng từng câu chữ).';
+  const isTtsDedicatedModel = model.includes('tts') || model.includes('preview-tts');
+
+  // Explicit Southern Vietnamese accent & tone directive
+  const accentDirective = '[CHẤT GIỌNG / ACCENT]: Đọc 100% bằng giọng miền Nam Việt Nam (Southern Vietnamese Accent), âm điệu Nam Bộ ấm áp, từ tốn, trang trọng và truyền cảm.';
 
   let fullPrompt = text;
-  if (systemPrompt && systemPrompt.trim()) {
-    fullPrompt = `${styleDirective}\n[YÊU CẦU CỤ THỂ]: ${systemPrompt.trim()}\n\n[NỘI DUNG CẦN ĐỌC]: ${text}`;
+  if (isTtsDedicatedModel) {
+    // For TTS dedicated models, prepend simple clean accent directive before transcript text
+    fullPrompt = `${accentDirective}\n\n${text}`;
   } else {
-    fullPrompt = `${styleDirective}\n\n[NỘI DUNG CẦN ĐỌC]: ${text}`;
+    const customInstruction = systemPrompt && systemPrompt.trim() ? systemPrompt.trim() : accentDirective;
+    fullPrompt = `${accentDirective}\n[YÊU CẦU CỤ THỂ]: ${customInstruction}\n[PHONG CÁCH]: Newsletter (Nghiêm nghị, từ tốn, rõ lời, chuẩn giọng miền Nam Việt Nam).\n\n[NỘI DUNG CẦN ĐỌC]:\n${text}`;
   }
 
   const payload = {
@@ -260,14 +354,10 @@ async function callGeminiAudioApi({ text, apiKey, model, systemPrompt, voice }) 
 
   const parts = candidates[0]?.content?.parts || [];
   let inlineAudioData = null;
-  let textResponse = '';
 
   for (const part of parts) {
     if (part.inlineData && part.inlineData.data) {
       inlineAudioData = part.inlineData;
-    }
-    if (part.text) {
-      textResponse += part.text + ' ';
     }
   }
 
@@ -279,30 +369,15 @@ async function callGeminiAudioApi({ text, apiKey, model, systemPrompt, voice }) 
   const rawMimeType = inlineAudioData.mimeType || 'audio/mp3';
   const rawBytes = base64ToUint8Array(base64Data);
 
-  // Parse sample rate if specified in mimeType string (e.g., audio/pcm;rate=24000)
   let sampleRate = 24000;
   const rateMatch = rawMimeType.match(/rate=(\d+)/i);
   if (rateMatch && rateMatch[1]) {
     sampleRate = parseInt(rateMatch[1], 10);
   }
 
-  let blob;
-  const cleanMime = rawMimeType.split(';')[0].trim().toLowerCase();
-
-  // If MIME indicates raw PCM or uncontainerized data, convert to WAV Blob
-  if (cleanMime.includes('pcm') || cleanMime.includes('raw') || cleanMime.includes('l16') || !cleanMime.startsWith('audio/')) {
-    blob = pcmToWavBlob(rawBytes, sampleRate, 1);
-  } else {
-    // Standard audio container format (e.g., audio/mp3, audio/wav, audio/ogg)
-    blob = new Blob([rawBytes], { type: cleanMime });
-  }
-
-  const audioUrl = URL.createObjectURL(blob);
-
   return {
-    audioUrl,
-    blob,
-    mimeType: blob.type,
-    textResponse: textResponse.trim(),
+    rawBytes,
+    sampleRate,
+    rawMimeType,
   };
 }

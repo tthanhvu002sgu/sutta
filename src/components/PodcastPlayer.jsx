@@ -5,6 +5,7 @@ export default function PodcastPlayer({
   audioUrl,
   isLoading,
   statusMessage,
+  progressPercent = 0,
   isCached,
   error,
   onClose,
@@ -144,11 +145,26 @@ export default function PodcastPlayer({
         {/* Title */}
         <div className="podcast-title">{title || 'Đang tạo Audio cho bài đọc...'}</div>
 
-        {/* Loading state */}
+        {/* Loading state with Live Progress Bar */}
         {isLoading && (
-          <div className="podcast-status loading">
-            <span className="spinner" />
-            <span>{statusMessage || 'Đang tạo giọng đọc AI...'}</span>
+          <div style={{ marginBottom: 14 }}>
+            <div className="podcast-status loading" style={{ marginBottom: 8 }}>
+              <span className="spinner" />
+              <span style={{ flex: 1 }}>{statusMessage || 'Đang tạo giọng đọc AI...'}</span>
+              <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--annotation-color)', minWidth: 36, textAlign: 'right' }}>
+                {progressPercent || 10}%
+              </span>
+            </div>
+            <div style={{ height: 4, background: 'var(--bg3)', borderRadius: 2, overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${progressPercent || 10}%`,
+                  height: '100%',
+                  background: 'var(--annotation-color)',
+                  transition: 'width 0.4s ease-out',
+                }}
+              />
+            </div>
           </div>
         )}
 

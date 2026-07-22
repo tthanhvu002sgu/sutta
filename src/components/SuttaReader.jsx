@@ -622,7 +622,8 @@ export default function SuttaReader({ sutta }) {
       loading: true,
       audioUrl: null,
       title: sutta.title,
-      statusMessage: 'Đang kết nối Gemini Voice API...',
+      statusMessage: 'Đang khởi tạo kết nối Gemini Voice API...',
+      progressPercent: 10,
       usedModel: '',
       isFallbackUsed: false,
       isCached: false,
@@ -637,8 +638,16 @@ export default function SuttaReader({ sutta }) {
         fallbackModel: settings.geminiTtsFallbackModel || 'gemini-2.5-flash',
         systemPrompt: settings.geminiSystemPrompt,
         voice: settings.geminiVoice || 'Enceladus',
-        onStatusUpdate: (msg) => {
-          setPodcastState((prev) => ({ ...prev, statusMessage: msg }));
+        onStatusUpdate: (status) => {
+          if (typeof status === 'object') {
+            setPodcastState((prev) => ({
+              ...prev,
+              statusMessage: status.message || prev.statusMessage,
+              progressPercent: status.percent || prev.progressPercent,
+            }));
+          } else {
+            setPodcastState((prev) => ({ ...prev, statusMessage: status }));
+          }
         },
       });
 
@@ -1068,6 +1077,7 @@ export default function SuttaReader({ sutta }) {
             audioUrl={podcastState.audioUrl}
             isLoading={podcastState.loading}
             statusMessage={podcastState.statusMessage}
+            progressPercent={podcastState.progressPercent}
             usedModel={podcastState.usedModel}
             isFallbackUsed={podcastState.isFallbackUsed}
             isCached={podcastState.isCached}
