@@ -1,7 +1,7 @@
 /**
  * Gemini Voice & TTS API Service
  * Handles long text chunking, PCM audio concatenation, live progress tracking,
- * health checks, and fallback model strategy.
+ * auto-retry on 429 rate limit errors with live countdown, and fallback model strategy.
  */
 
 function base64ToUint8Array(base64) {
@@ -80,7 +80,6 @@ function concatenatePcmArrays(pcmArrays) {
 
 /**
  * Splits long text into manageable chunks at sentence boundaries (target ~9000 characters / ~3000 tokens per chunk)
- * to prevent Gemini API output token cutoff while minimizing API calls.
  */
 function splitTextIntoChunks(text, targetChunkSize = 9000) {
   if (!text || text.length <= targetChunkSize) {
@@ -126,6 +125,17 @@ function splitTextIntoChunks(text, targetChunkSize = 9000) {
 }
 
 /**
+ * Extracts retry seconds from Gemini API 429 Rate Limit error string
+ */
+function parseRetrySeconds(msg) {
+  const match = msg.match(/retry in ([\d\.]+)s/i);
+  if (match && match[1]) {
+    return Math.ceil(parseFloat(match[1]));
+  }
+  return 30;
+}
+
+/**
  * Quick Pre-flight Health Check to test if a model is active and responding
  */
 async function pingModelHealth(model, apiKey, timeoutMs = 3500) {
@@ -162,7 +172,7 @@ async function pingModelHealth(model, apiKey, timeoutMs = 3500) {
 }
 
 /**
- * Call Gemini API with automated long-text chunking & seamless PCM audio concatenation
+ * Call Gemini API with automated long-text chunking, 429 auto-retry countdown & seamless PCM audio concatenation
  */
 export async function generateGeminiAudio({
   text,
@@ -192,9 +202,8 @@ export async function generateGeminiAudio({
 
   const modelsToTry = [...new Set(candidateModels)];
 
-  // Stage 1: Split text into chunks (~3000 tokens / 9000 chars) to prevent token cutoff
+  // Stage 1: Split text into chunks (~3000 tokens / 9000 chars)
   const textChunks = splitTextIntoChunks(text, 9000);
-  console.log(`Đã phân đoạn văn bản thành ${textChunks.length} phần.`);
 
   onStatusUpdate({ percent: 10, message: `Kiểm tra mô hình API (${textChunks.length} đoạn văn bản)...` });
 
@@ -219,7 +228,7 @@ export async function generateGeminiAudio({
   const pcmChunkList = [];
   let detectedSampleRate = 24000;
 
-  // Stage 2: Sequentially generate audio for each chunk
+  // Stage 2: Sequentially generate audio for each chunk with 429 Auto-Countdown
   for (let i = 0; i < textChunks.length; i++) {
     const currentChunkText = textChunks[i];
     const chunkPercent = Math.round(20 + ((i + 1) / textChunks.length) * 70);
@@ -230,12 +239,16 @@ export async function generateGeminiAudio({
     });
 
     try {
-      const chunkResult = await callGeminiAudioApi({
+      const chunkResult = await callGeminiAudioWithAutoRetry({
         text: currentChunkText,
         apiKey: apiKey.trim(),
         model: targetModel,
-        systemPrompt: i === 0 ? systemPrompt : '', // apply prompt context on main chunk
+        systemPrompt: i === 0 ? systemPrompt : '',
         voice,
+        onStatusUpdate,
+        currentChunkIndex: i,
+        totalChunks: textChunks.length,
+        currentPercent: chunkPercent,
       });
 
       pcmChunkList.push(chunkResult.rawBytes);
@@ -243,18 +256,24 @@ export async function generateGeminiAudio({
         detectedSampleRate = chunkResult.sampleRate;
       }
     } catch (err) {
-      console.warn(`Lỗi khi tạo đoạn ${i + 1} với mô hình ${targetModel}:`, err);
-      // Fallback to alternative model if current chunk fails
+      console.warn(`Lỗi tại đoạn ${i + 1} với mô hình ${targetModel}:`, err);
+
+      // Try alternative model if available
       let recovered = false;
       for (const altModel of modelsToTry) {
         if (altModel === targetModel) continue;
         try {
-          const chunkResult = await callGeminiAudioApi({
+          onStatusUpdate({ percent: chunkPercent, message: `Chuyển mô hình dự phòng ${altModel}...` });
+          const chunkResult = await callGeminiAudioWithAutoRetry({
             text: currentChunkText,
             apiKey: apiKey.trim(),
             model: altModel,
             systemPrompt: i === 0 ? systemPrompt : '',
             voice,
+            onStatusUpdate,
+            currentChunkIndex: i,
+            totalChunks: textChunks.length,
+            currentPercent: chunkPercent,
           });
           pcmChunkList.push(chunkResult.rawBytes);
           if (chunkResult.sampleRate) detectedSampleRate = chunkResult.sampleRate;
@@ -263,8 +282,9 @@ export async function generateGeminiAudio({
           break;
         } catch (_) {}
       }
+
       if (!recovered) {
-        throw new Error(`Lỗi tại đoạn ${i + 1}/${textChunks.length}: ${err.message}`);
+        throw new Error(`Lỗi đoạn ${i + 1}/${textChunks.length}: ${err.message}`);
       }
     }
   }
@@ -288,6 +308,44 @@ export async function generateGeminiAudio({
   };
 }
 
+async function callGeminiAudioWithAutoRetry({
+  text,
+  apiKey,
+  model,
+  systemPrompt,
+  voice,
+  onStatusUpdate,
+  currentChunkIndex,
+  totalChunks,
+  currentPercent,
+}) {
+  try {
+    return await callGeminiAudioApi({ text, apiKey, model, systemPrompt, voice });
+  } catch (err) {
+    const isQuotaError =
+      err.message.includes('Quota exceeded') ||
+      err.message.includes('429') ||
+      err.message.includes('RESOURCE_EXHAUSTED');
+
+    if (isQuotaError) {
+      const waitSecs = parseRetrySeconds(err.message);
+      for (let s = waitSecs; s > 0; s--) {
+        onStatusUpdate({
+          percent: currentPercent,
+          message: `⏳ Giới hạn Free Tier (10-15 lần/phút). Tự động đếm ngược ${s}s để tiếp tục đoạn ${currentChunkIndex + 1}/${totalChunks}...`,
+        });
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      onStatusUpdate({
+        percent: currentPercent,
+        message: `🔄 Hết thời gian chờ! Đang thử lại đoạn ${currentChunkIndex + 1}/${totalChunks}...`,
+      });
+      return await callGeminiAudioApi({ text, apiKey, model, systemPrompt, voice });
+    }
+    throw err;
+  }
+}
+
 async function callGeminiAudioApi({ text, apiKey, model, systemPrompt, voice }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
@@ -298,7 +356,6 @@ async function callGeminiAudioApi({ text, apiKey, model, systemPrompt, voice }) 
 
   let fullPrompt = text;
   if (isTtsDedicatedModel) {
-    // For TTS dedicated models, prepend simple clean accent directive before transcript text
     fullPrompt = `${accentDirective}\n\n${text}`;
   } else {
     const customInstruction = systemPrompt && systemPrompt.trim() ? systemPrompt.trim() : accentDirective;

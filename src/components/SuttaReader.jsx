@@ -559,6 +559,35 @@ export default function SuttaReader({ sutta }) {
     return () => { isMounted = false; };
   }, [sutta.id]);
   
+  const audioFileInputRef = useRef(null);
+
+  const handleUploadAudioFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const cacheKey = `sutta-audio-${sutta.id}`;
+    try {
+      await setStore(cacheKey, file);
+      const audioUrl = URL.createObjectURL(file);
+      setHasCachedAudio(true);
+      setPodcastState({
+        open: true,
+        loading: false,
+        audioUrl,
+        title: sutta.title,
+        statusMessage: '',
+        usedModel: 'File tải lên',
+        isFallbackUsed: false,
+        isCached: true,
+        error: null,
+      });
+      // Reset input value so same file can be re-selected if needed
+      e.target.value = '';
+    } catch (err) {
+      alert('Lỗi khi lưu file audio: ' + err.message);
+    }
+  };
+  
   // Progress state & scroll timeout
   const [progress, setProgress] = useState(0);
   const scrollSaveTimeoutRef = useRef(null);
@@ -924,25 +953,92 @@ export default function SuttaReader({ sutta }) {
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               📝 <strong>Độ dài:</strong> {readingTime.words.toLocaleString()} từ
             </span>
-            <button
-              className={`btn btn-sm ${hasCachedAudio ? 'btn-ghost' : 'btn-primary'}`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '4px 10px',
-                fontSize: '12px',
-                fontWeight: 600,
-                borderRadius: '6px',
-                cursor: 'pointer',
-                border: hasCachedAudio ? '1.5px solid var(--annotation-color)' : 'none',
-                color: hasCachedAudio ? 'var(--annotation-color)' : undefined,
-              }}
-              onClick={() => handleStartPodcast(false)}
-              title={hasCachedAudio ? 'Phát file Audio đã lưu từ IndexedDB' : 'Chuyển đổi bài đọc thành Podcast giọng đọc Gemini AI'}
-            >
-              {hasCachedAudio ? '▶ Nghe Podcast (Đã lưu)' : '🎙 Tạo Podcast / Đọc Voice'}
-            </button>
+            {/* Hidden Audio File Input */}
+            <input
+              type="file"
+              ref={audioFileInputRef}
+              accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac"
+              style={{ display: 'none' }}
+              onChange={handleUploadAudioFile}
+            />
+
+            {hasCachedAudio ? (
+              <>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    border: '1.5px solid var(--annotation-color)',
+                    color: 'var(--annotation-color)',
+                  }}
+                  onClick={() => handleStartPodcast(false)}
+                  title="Phát file Audio đã lưu"
+                >
+                  ▶ Nghe Podcast (Đã lưu)
+                </button>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => audioFileInputRef.current?.click()}
+                  title="Tải lên file Audio MP3/WAV mới thay thế bản lưu hiện tại"
+                >
+                  📤 Đổi file Audio
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className="btn btn-sm btn-primary"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => audioFileInputRef.current?.click()}
+                  title="Tải file audio từ máy tính của bạn (MP3, WAV, M4A...)"
+                >
+                  📤 Tải file Audio lên
+                </button>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => handleStartPodcast(false)}
+                  title="Tự động tạo giọng đọc bằng Gemini AI"
+                >
+                  🎙 Tạo bằng AI
+                </button>
+              </>
+            )}
             {sutta.scrollPosition > 10 && (
               <>
                 <span style={{ color: 'var(--border)' }}>|</span>

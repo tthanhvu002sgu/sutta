@@ -6,6 +6,7 @@ export default function PodcastPlayer({
   isLoading,
   statusMessage,
   progressPercent = 0,
+  usedModel,
   isCached,
   error,
   onClose,
@@ -125,11 +126,10 @@ export default function PodcastPlayer({
           }}
         />
 
-        {/* Clean Header */}
         <div className="podcast-header">
           <div className="podcast-badge-group">
             <span className="podcast-badge main-badge">
-              🎙 Voice Podcast
+              {usedModel === 'File tải lên' ? '📤 Audio Tải Lên' : '🎙 Voice Podcast'}
             </span>
             {isCached && (
               <span className="podcast-badge cache-badge">
