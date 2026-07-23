@@ -129,7 +129,7 @@ export default function PodcastPlayer({
         <div className="podcast-header">
           <div className="podcast-badge-group">
             <span className="podcast-badge main-badge">
-              {usedModel === 'File tải lên' ? '📤 Audio Tải Lên' : '🎙 Voice Podcast'}
+              🎙 Audio Podcast
             </span>
             {isCached && (
               <span className="podcast-badge cache-badge">

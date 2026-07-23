@@ -3,7 +3,6 @@ import ReactMarkdown from 'react-markdown';
 import { get as getStore, set as setStore, del as delStore } from 'idb-keyval';
 import { useApp } from '../context/AppContext';
 import PodcastPlayer from './PodcastPlayer';
-import { generateGeminiAudio } from '../services/geminiTts';
 
 function migrateText(text, annotations, blockId) {
   if (!text) return '';
@@ -592,125 +591,30 @@ export default function SuttaReader({ sutta }) {
   const [progress, setProgress] = useState(0);
   const scrollSaveTimeoutRef = useRef(null);
 
-  const handleStartPodcast = async (forceRegenerate = false) => {
+  const handleStartPodcast = async () => {
     const cacheKey = `sutta-audio-${sutta.id}`;
-
-    // 1. Check local IndexedDB cache unless user explicitly requested re-generation
-    if (!forceRegenerate) {
-      try {
-        const cachedBlob = await getStore(cacheKey);
-        if (cachedBlob) {
-          const audioUrl = URL.createObjectURL(cachedBlob);
-          setPodcastState({
-            open: true,
-            loading: false,
-            audioUrl,
-            title: sutta.title,
-            statusMessage: '',
-            usedModel: 'Bản lưu IndexedDB',
-            isFallbackUsed: false,
-            isCached: true,
-            error: null,
-          });
-          setHasCachedAudio(true);
-          return;
-        }
-      } catch (err) {
-        console.warn('Lỗi đọc bản lưu audio:', err);
-      }
-    }
-
-    // 2. If not cached or regenerating: Call Gemini API
-    if (!settings.geminiApiKey) {
-      if (window.confirm('Vui lòng cấu hình Gemini API Key trước. Bạn có muốn chuyển sang màn hình Cài đặt ngay bây giờ không?')) {
-        setView('settings');
-      }
-      return;
-    }
-
-    let textToRead = '';
-    if (showSummary && sutta.summaryContent) {
-      textToRead = sutta.summaryContent.replace(/<[^>]*>/g, ' ').replace(/[#*`_-]/g, ' ');
-    } else {
-      const html = migrateSuttaToHtml(sutta);
-      textToRead = html.replace(/<[^>]*>/g, ' ');
-    }
-
-    textToRead = textToRead.trim();
-    if (!textToRead) {
-      alert('Nội dung bài viết trống, không thể tạo giọng đọc.');
-      return;
-    }
-
-    if (textToRead.length > 8000) {
-      textToRead = textToRead.slice(0, 8000);
-    }
-
-    setPodcastState({
-      open: true,
-      loading: true,
-      audioUrl: null,
-      title: sutta.title,
-      statusMessage: 'Đang khởi tạo kết nối Gemini Voice API...',
-      progressPercent: 10,
-      usedModel: '',
-      isFallbackUsed: false,
-      isCached: false,
-      error: null,
-    });
-
     try {
-      const res = await generateGeminiAudio({
-        text: textToRead,
-        apiKey: settings.geminiApiKey,
-        primaryModel: settings.geminiTtsModel || 'gemini-2.0-flash',
-        fallbackModel: settings.geminiTtsFallbackModel || 'gemini-2.5-flash',
-        systemPrompt: settings.geminiSystemPrompt,
-        voice: settings.geminiVoice || 'Enceladus',
-        onStatusUpdate: (status) => {
-          if (typeof status === 'object') {
-            setPodcastState((prev) => ({
-              ...prev,
-              statusMessage: status.message || prev.statusMessage,
-              progressPercent: status.percent || prev.progressPercent,
-            }));
-          } else {
-            setPodcastState((prev) => ({ ...prev, statusMessage: status }));
-          }
-        },
-      });
-
-      // 3. Save generated audio Blob to IndexedDB
-      try {
-        await setStore(cacheKey, res.blob);
+      const cachedBlob = await getStore(cacheKey);
+      if (cachedBlob) {
+        const audioUrl = URL.createObjectURL(cachedBlob);
+        setPodcastState({
+          open: true,
+          loading: false,
+          audioUrl,
+          title: sutta.title,
+          statusMessage: '',
+          usedModel: 'File tải lên',
+          isFallbackUsed: false,
+          isCached: true,
+          error: null,
+        });
         setHasCachedAudio(true);
-      } catch (saveErr) {
-        console.warn('Không thể lưu file audio vào IndexedDB:', saveErr);
+      } else {
+        audioFileInputRef.current?.click();
       }
-
-      setPodcastState({
-        open: true,
-        loading: false,
-        audioUrl: res.audioUrl,
-        title: sutta.title,
-        statusMessage: '',
-        usedModel: res.usedModel,
-        isFallbackUsed: res.isFallbackUsed,
-        isCached: true,
-        error: null,
-      });
     } catch (err) {
-      setPodcastState({
-        open: true,
-        loading: false,
-        audioUrl: null,
-        title: sutta.title,
-        statusMessage: '',
-        usedModel: '',
-        isFallbackUsed: false,
-        isCached: false,
-        error: err.message,
-      });
+      console.warn('Lỗi đọc file audio:', err);
+      audioFileInputRef.current?.click();
     }
   };
 
@@ -1002,42 +906,23 @@ export default function SuttaReader({ sutta }) {
                 </button>
               </>
             ) : (
-              <>
-                <button
-                  className="btn btn-sm btn-primary"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '4px 10px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => audioFileInputRef.current?.click()}
-                  title="Tải file audio từ máy tính của bạn (MP3, WAV, M4A...)"
-                >
-                  📤 Tải file Audio lên
-                </button>
-                <button
-                  className="btn btn-sm btn-ghost"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '4px 10px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => handleStartPodcast(false)}
-                  title="Tự động tạo giọng đọc bằng Gemini AI"
-                >
-                  🎙 Tạo bằng AI
-                </button>
-              </>
+              <button
+                className="btn btn-sm btn-primary"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+                onClick={() => audioFileInputRef.current?.click()}
+                title="Tải file audio từ máy tính của bạn (MP3, WAV, M4A...)"
+              >
+                📤 Tải file Audio lên
+              </button>
             )}
             {sutta.scrollPosition > 10 && (
               <>
