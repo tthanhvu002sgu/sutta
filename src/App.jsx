@@ -6,7 +6,7 @@ import Settings from './components/Settings';
 import UploadModal from './components/UploadModal';
 
 function AppShell() {
-  const { activeSutta, view, annotationMode, setAnnotationMode, settings, updateSetting, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed, setAutoScrollSpeed, isDeepMode, setIsDeepMode, showRightSidebar, setShowRightSidebar } = useApp();
+  const { activeSutta, view, annotationMode, setAnnotationMode, settings, updateSetting, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed, setAutoScrollSpeed, isDeepMode, setIsDeepMode, showRightSidebar, setShowRightSidebar, copyShareUrl, toastMessage } = useApp();
   const [showUpload, setShowUpload] = useState(false);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(300);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -444,6 +444,18 @@ function AppShell() {
                 </>
               )}
             </div>
+
+            <div className="toolbar-sep" />
+
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={() => copyShareUrl(true)}
+              title="Sao chép URL bài kinh & cài đặt hiện tại để gửi cho người khác"
+              id="toolbar-copy-share-url"
+              style={{ fontWeight: 500 }}
+            >
+              🔗 Chia sẻ URL
+            </button>
           </div>
         )}
 
@@ -516,6 +528,7 @@ function AppShell() {
       )}
 
       {showUpload && <UploadModal onClose={() => setShowUpload(false)} />}
+      {toastMessage && <div className="toast-notification">{toastMessage}</div>}
     </div>
   );
 }

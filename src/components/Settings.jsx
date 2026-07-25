@@ -5,7 +5,7 @@ const FONTS = ['Lora', 'Times New Roman', 'Google Sans'];
 const FONT_SIZES = [13, 14, 15, 16, 17, 18, 19, 20, 22, 24];
 
 export default function Settings() {
-  const { suttas, settings, updateSetting, restoreData, syncToGist, syncFromGist } = useApp();
+  const { suttas, settings, updateSetting, restoreData, syncToGist, syncFromGist, copyShareUrl } = useApp();
   const [syncStatus, setSyncStatus] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const colorRef = { current: null };
@@ -78,6 +78,20 @@ export default function Settings() {
     <div className="settings-panel">
       <div className="settings-inner">
         <h1 className="sutta-title" style={{ fontSize: '1.5em', marginBottom: 28 }}>⚙ Cài đặt</h1>
+
+        {/* Share URL */}
+        <div className="settings-section">
+          <div className="settings-section-title">Chia sẻ Liên kết & Cài đặt</div>
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Sao chép URL Cài đặt & Bài kinh</div>
+              <div className="settings-row-desc">Tạo đường dẫn URL trực tiếp chứa toàn bộ tùy chỉnh giao diện (cỡ chữ, font, theme, chế độ đọc) để gửi cho người khác</div>
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={() => copyShareUrl(true)} style={{ whiteSpace: 'nowrap' }}>
+              🔗 Sao chép URL Cài đặt
+            </button>
+          </div>
+        </div>
 
         {/* Typography */}
         <div className="settings-section">

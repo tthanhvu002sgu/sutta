@@ -565,6 +565,18 @@ input[type="color"] { opacity: 0; width: 0; height: 0; position: absolute; }
 .markdown-body code { font-family: monospace; font-size: 0.9em; background: var(--bg3); padding: 2px 4px; border-radius: 3px; }
 .markdown-body pre code { padding: 0; background: transparent; }
 
+/* KaTeX Math support */
+.markdown-body .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 0;
+  margin: 1em 0;
+}
+.markdown-body .katex {
+  font-size: 1.1em;
+  color: var(--text);
+}
+
 /* Mobile Utilities */
 .mobile-menu-btn, .mobile-right-menu-btn, .mobile-close-btn { display: none; }
 .desktop-collapse-btn { display: flex; }
@@ -1182,6 +1194,27 @@ input[type="color"] { opacity: 0; width: 0; height: 0; position: absolute; }
   background: transparent !important;
   cursor: default !important;
   padding: 0 !important;
+}
+
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--btn-primary-bg, #2980b9);
+  color: #ffffff;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 99999;
+  animation: toastFadeIn 0.25s ease-out;
+}
+
+@keyframes toastFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 

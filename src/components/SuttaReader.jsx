@@ -1,5 +1,9 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import remarkGfm from 'remark-gfm';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { get as getStore, set as setStore, del as delStore } from 'idb-keyval';
 import { useApp } from '../context/AppContext';
 import PodcastPlayer from './PodcastPlayer';
@@ -518,7 +522,7 @@ function calculateReadingTime(sutta) {
 }
 
 export default function SuttaReader({ sutta }) {
-  const { annotationMode, updateSutta, settings, removeAnnotation, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed, setView } = useApp();
+  const { annotationMode, updateSutta, settings, removeAnnotation, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed, setView, copyShareUrl } = useApp();
   const [tooltip, setTooltip] = useState(null);
   const [popup, setPopup] = useState(null);
   const [isEditingSummary, setIsEditingSummary] = useState(false);
@@ -1105,7 +1109,17 @@ export default function SuttaReader({ sutta }) {
               </button>
             </div>
           </div>
-          <button className="btn btn-sm" onClick={() => setShowSummary(false)}>Đóng (ESC)</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => copyShareUrl(true)}
+              title="Sao chép URL trực tiếp tới bản giải thích này"
+              style={{ fontSize: 12, gap: 4 }}
+            >
+              🔗 Chia sẻ bản giải thích
+            </button>
+            <button className="btn btn-sm" onClick={() => setShowSummary(false)}>Đóng (ESC)</button>
+          </div>
         </div>
       )}
     </>
@@ -1125,7 +1139,7 @@ export default function SuttaReader({ sutta }) {
       ) : (
         <div className="markdown-body" style={{ fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6 }}>
           {sutta.summaryContent ? (
-            <ReactMarkdown>{sutta.summaryContent}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>{sutta.summaryContent}</ReactMarkdown>
           ) : (
             <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: 40 }}>
               Chưa có nội dung. Bấm "Sửa" để dán bản giải thích vào đây.

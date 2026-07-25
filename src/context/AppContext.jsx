@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { get, set } from 'idb-keyval';
 import { initialSuttas } from '../data/initialData';
 
@@ -18,6 +18,118 @@ const DEFAULT_SETTINGS = {
   readingMode: 'scroll',
 };
 
+// Helper: Parse URL parameters and hash
+function parseUrlState(availableSuttas) {
+  const hash = window.location.hash || '';
+  if (!hash || hash === '#/' || hash === '#') return null;
+
+  const [hashPath, queryString] = hash.split('?');
+  const path = hashPath.replace(/^#\/?/, '');
+  const params = new URLSearchParams(queryString || '');
+
+  const result = {
+    view: null,
+    suttaId: null,
+    showSummary: null,
+    settingsOverride: {},
+  };
+
+  if (path === 'settings') {
+    result.view = 'settings';
+  } else {
+    const suttaId = path.replace(/^sutta\//, '').trim();
+    if (suttaId) {
+      result.view = 'reader';
+      const exists = availableSuttas?.some(s => s.id === suttaId);
+      if (exists) {
+        result.suttaId = suttaId;
+      }
+    }
+  }
+
+  const tab = params.get('tab');
+  if (tab === 'summary') {
+    result.showSummary = true;
+  } else if (tab === 'text') {
+    result.showSummary = false;
+  }
+
+  const theme = params.get('theme');
+  if (theme && ['light', 'dark', 'sepia', 'cyberpunk'].includes(theme)) {
+    result.settingsOverride.theme = theme;
+  }
+
+  const font = params.get('font') || params.get('fontFamily');
+  if (font && ['Lora', 'Times New Roman', 'Google Sans'].includes(font)) {
+    result.settingsOverride.fontFamily = font;
+  }
+
+  const size = params.get('size') || params.get('fontSize');
+  if (size && !isNaN(parseInt(size))) {
+    result.settingsOverride.fontSize = Math.max(12, Math.min(28, parseInt(size)));
+  }
+
+  const mode = params.get('mode') || params.get('readingMode');
+  if (mode && ['scroll', 'paged'].includes(mode)) {
+    result.settingsOverride.readingMode = mode;
+  }
+
+  const lh = params.get('lh') || params.get('lineHeight');
+  if (lh && !isNaN(parseFloat(lh))) {
+    result.settingsOverride.lineHeight = Math.max(1.0, Math.min(3.0, parseFloat(lh)));
+  }
+
+  const px = params.get('px') || params.get('paddingX');
+  if (px && !isNaN(parseInt(px))) {
+    result.settingsOverride.paddingX = Math.max(0, Math.min(40, parseInt(px)));
+  }
+
+  const color = params.get('color');
+  if (color && /^#[0-9a-fA-F]{3,8}$/.test(color)) {
+    result.settingsOverride.annotationColor = color;
+  }
+
+  return result;
+}
+
+// Helper: Build hash string based on state
+function buildUrlHash({ view, activeSuttaId, showSummary, settings }) {
+  if (view === 'settings') {
+    return '#/settings';
+  }
+
+  if (!activeSuttaId) return '#/';
+
+  const params = new URLSearchParams();
+  if (showSummary) {
+    params.set('tab', 'summary');
+  }
+
+  if (settings) {
+    if (settings.theme && settings.theme !== DEFAULT_SETTINGS.theme) {
+      params.set('theme', settings.theme);
+    }
+    if (settings.fontFamily && settings.fontFamily !== DEFAULT_SETTINGS.fontFamily) {
+      params.set('font', settings.fontFamily);
+    }
+    if (settings.fontSize && settings.fontSize !== DEFAULT_SETTINGS.fontSize) {
+      params.set('size', settings.fontSize);
+    }
+    if (settings.readingMode && settings.readingMode !== DEFAULT_SETTINGS.readingMode) {
+      params.set('mode', settings.readingMode);
+    }
+    if (settings.lineHeight && settings.lineHeight !== DEFAULT_SETTINGS.lineHeight) {
+      params.set('lh', settings.lineHeight);
+    }
+    if (settings.paddingX !== undefined && settings.paddingX !== DEFAULT_SETTINGS.paddingX) {
+      params.set('px', settings.paddingX);
+    }
+  }
+
+  const queryString = params.toString();
+  return `#/sutta/${activeSuttaId}${queryString ? '?' + queryString : ''}`;
+}
+
 export function AppProvider({ children }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [suttas, setSuttas] = useState([]);
@@ -30,6 +142,12 @@ export function AppProvider({ children }) {
   const [autoScrollSpeed, setAutoScrollSpeed] = useState(1);
   const [isDeepMode, setIsDeepMode] = useState(false);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const showToast = useCallback((msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  }, []);
 
   // Initial load
   useEffect(() => {
@@ -60,11 +178,29 @@ export function AppProvider({ children }) {
 
         const finalSuttas = loadedSuttas || initialSuttas;
         setSuttas(finalSuttas);
-        setActiveSuttaId(finalSuttas[0]?.id || null);
-        
-        if (loadedSettings) {
-          setSettings(prev => ({ ...prev, ...loadedSettings }));
+
+        let finalSettings = { ...DEFAULT_SETTINGS, ...loadedSettings };
+
+        // Parse initial URL for sutta ID, view mode, tab, and settings
+        const parsed = parseUrlState(finalSuttas);
+        if (parsed) {
+          if (parsed.view) setView(parsed.view);
+          if (parsed.suttaId) {
+            setActiveSuttaId(parsed.suttaId);
+          } else {
+            setActiveSuttaId(finalSuttas[0]?.id || null);
+          }
+          if (parsed.showSummary !== null) {
+            setShowSummary(parsed.showSummary);
+          }
+          if (Object.keys(parsed.settingsOverride).length > 0) {
+            finalSettings = { ...finalSettings, ...parsed.settingsOverride };
+          }
+        } else {
+          setActiveSuttaId(finalSuttas[0]?.id || null);
         }
+
+        setSettings(finalSettings);
       } catch (err) {
         console.error('Failed to load from IndexedDB', err);
         setSuttas(initialSuttas);
@@ -75,6 +211,35 @@ export function AppProvider({ children }) {
     }
     loadData();
   }, []);
+
+  // Sync state to URL hash
+  useEffect(() => {
+    if (!isLoaded) return;
+    const newHash = buildUrlHash({ view, activeSuttaId, showSummary, settings });
+    if (window.location.hash !== newHash) {
+      window.history.replaceState(null, '', newHash);
+    }
+  }, [isLoaded, view, activeSuttaId, showSummary, settings]);
+
+  // Handle browser back / forward navigation (hashchange)
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const handleHashChange = () => {
+      const parsed = parseUrlState(suttas);
+      if (!parsed) return;
+
+      if (parsed.view && parsed.view !== view) setView(parsed.view);
+      if (parsed.suttaId && parsed.suttaId !== activeSuttaId) setActiveSuttaId(parsed.suttaId);
+      if (parsed.showSummary !== null && parsed.showSummary !== showSummary) setShowSummary(parsed.showSummary);
+      if (Object.keys(parsed.settingsOverride).length > 0) {
+        setSettings(prev => ({ ...prev, ...parsed.settingsOverride }));
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [isLoaded, suttas, view, activeSuttaId, showSummary]);
 
   // Persist Suttas
   useEffect(() => {
@@ -105,6 +270,37 @@ export function AppProvider({ children }) {
     document.documentElement.style.setProperty('--editor-padding-x', (settings.paddingX !== undefined ? settings.paddingX : 15) + '%');
     document.documentElement.setAttribute('data-theme', settings.theme || 'light');
   }, [settings, isLoaded]);
+
+  // Copy shareable URL to clipboard
+  const copyShareUrl = useCallback((includeSettings = true) => {
+    const url = new URL(window.location.href);
+    if (view === 'settings') {
+      url.hash = '#/settings';
+    } else if (activeSuttaId) {
+      const params = new URLSearchParams();
+      params.set('tab', showSummary ? 'summary' : 'text');
+      if (includeSettings) {
+        params.set('theme', settings.theme || 'light');
+        params.set('font', settings.fontFamily || 'Lora');
+        params.set('size', settings.fontSize || 17);
+        params.set('mode', settings.readingMode || 'scroll');
+        if (settings.lineHeight) params.set('lh', settings.lineHeight);
+        if (settings.paddingX !== undefined) params.set('px', settings.paddingX);
+      }
+      url.hash = `#/sutta/${activeSuttaId}?${params.toString()}`;
+    }
+
+    const shareUrl = url.href;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        showToast('📋 Đã sao chép URL bài kinh & cài đặt vào bộ nhớ tạm!');
+      }).catch(() => {
+        prompt('Sao chép liên kết dưới đây:', shareUrl);
+      });
+    } else {
+      prompt('Sao chép liên kết dưới đây:', shareUrl);
+    }
+  }, [view, activeSuttaId, showSummary, settings, showToast]);
 
   const activeSutta = suttas.find(s => s.id === activeSuttaId) || null;
 
@@ -248,6 +444,9 @@ export function AppProvider({ children }) {
       addAnnotation, removeAnnotation,
       restoreData,
       syncToGist, syncFromGist,
+      copyShareUrl,
+      toastMessage,
+      showToast,
     }}>
       {children}
     </AppContext.Provider>
