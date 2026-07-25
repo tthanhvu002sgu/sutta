@@ -260,7 +260,7 @@ function FindReplaceBar({ findText, setFindText, onClose, updateSuttaContent, fo
   );
 }
 
-function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateSuttaContent, isMobile, onOpenFindReplace }) {
+function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateSuttaContent, isMobile, onOpenFindReplace, isPagedMode }) {
   const ref = useRef();
   const [resizingMark, setResizingMark] = useState(null);
 
@@ -436,7 +436,7 @@ function FullEditor({ sutta, annotationMode, onShowPopup, onShowTooltip, updateS
       <div
         ref={ref}
         className="full-editor"
-        contentEditable={!isMobile && !annotationMode && !resizingMark}
+        contentEditable={!isPagedMode && !isMobile && !annotationMode && !resizingMark}
         suppressContentEditableWarning
         onBlur={handleBlur}
         onMouseUp={handleMouseUp}
@@ -655,8 +655,10 @@ export default function SuttaReader({ sutta }) {
     const columnSpan = width + gap;
     if (width <= 0) return;
 
+    el.style.setProperty('column-width', `${width}px`, 'important');
+
     const scrollWidth = el.scrollWidth;
-    const calculatedPages = Math.max(1, Math.round((scrollWidth + gap) / columnSpan));
+    const calculatedPages = Math.max(1, Math.ceil((scrollWidth - 10) / columnSpan));
     setTotalPages(calculatedPages);
 
     const page = Math.min(calculatedPages, Math.max(1, Math.round(el.scrollLeft / columnSpan) + 1));
@@ -696,6 +698,7 @@ export default function SuttaReader({ sutta }) {
     };
 
     updateCalculations();
+    window.addEventListener('resize', updateCalculations);
 
     const el = getActiveColumnContainer();
     let observer;
@@ -706,11 +709,14 @@ export default function SuttaReader({ sutta }) {
 
     const timer1 = setTimeout(updateCalculations, 100);
     const timer2 = setTimeout(updateCalculations, 400);
+    const timer3 = setTimeout(updateCalculations, 800);
 
     return () => {
+      window.removeEventListener('resize', updateCalculations);
       if (observer) observer.disconnect();
       clearTimeout(timer1);
       clearTimeout(timer2);
+      clearTimeout(timer3);
     };
   }, [isPagedMode, calculatePagination, getActiveColumnContainer, sutta.id, sutta.htmlContent, sutta.summaryContent, settings.fontSize, settings.fontFamily, settings.lineHeight, settings.paddingX, showSummary]);
 
@@ -975,6 +981,187 @@ export default function SuttaReader({ sutta }) {
     return () => window.removeEventListener('edit-annotation', handleEdit);
   }, []);
 
+  const renderHeaderAndMetadata = () => (
+    <>
+      <h1 className="sutta-title" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {title: e.target.innerText})}>{sutta.title}</h1>
+      {sutta.subtitle && <div className="sutta-subtitle" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {subtitle: e.target.innerText})}>{sutta.subtitle}</div>}
+
+      <div 
+        className="sutta-metadata" 
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          fontSize: '13px',
+          color: 'var(--text-muted)',
+          marginBottom: '16px',
+          marginTop: sutta.subtitle ? '-16px' : '0px',
+          borderBottom: '1px dashed var(--border)',
+          paddingBottom: '12px',
+          flexWrap: 'wrap',
+        }}
+        id="sutta-metadata-bar"
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          ⏱️ <strong>Thời gian đọc:</strong> ~{readingTime.minutes} phút
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          📝 <strong>Độ dài:</strong> {readingTime.words.toLocaleString()} từ
+        </span>
+        <input
+          type="file"
+          ref={audioFileInputRef}
+          accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac"
+          style={{ display: 'none' }}
+          onChange={handleUploadAudioFile}
+        />
+
+        {hasCachedAudio ? (
+          <>
+            <button
+              className="btn btn-sm btn-ghost"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px',
+                fontSize: '12px',
+                fontWeight: 600,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                border: '1.5px solid var(--annotation-color)',
+                color: 'var(--annotation-color)',
+              }}
+              onClick={() => handleStartPodcast(false)}
+              title="Phát file Audio đã lưu"
+            >
+              ▶ Nghe Podcast (Đã lưu)
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px',
+                fontSize: '12px',
+                fontWeight: 600,
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+              onClick={() => audioFileInputRef.current?.click()}
+              title="Tải lên file Audio MP3/WAV mới thay thế bản lưu hiện tại"
+            >
+              📤 Đổi file Audio
+            </button>
+          </>
+        ) : (
+          <button
+            className="btn btn-sm btn-primary"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              fontSize: '12px',
+              fontWeight: 600,
+              borderRadius: '6px',
+              cursor: 'pointer',
+            }}
+            onClick={() => audioFileInputRef.current?.click()}
+            title="Tải file audio từ máy tính của bạn (MP3, WAV, M4A...)"
+          >
+            📤 Tải file Audio lên
+          </button>
+        )}
+        {sutta.scrollPosition > 10 && (
+          <>
+            <span style={{ color: 'var(--border)' }}>|</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--annotation-color)', fontWeight: 500 }}>
+              🔖 <strong>Đang đọc dở</strong> (Khôi phục tự động)
+            </span>
+          </>
+        )}
+      </div>
+
+      {showSummary && (
+        <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Bản giải thích (Tóm tắt)</span>
+            <div style={{ display: 'flex', background: 'var(--bg)', borderRadius: 4, padding: 2, border: '1px solid var(--border)' }}>
+              <button
+                className={`btn btn-sm ${!isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ border: 'none', borderRadius: 3 }}
+                onClick={() => setIsEditingSummary(false)}
+              >
+                Xem
+              </button>
+              <button
+                className={`btn btn-sm ${isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ border: 'none', borderRadius: 3 }}
+                onClick={() => setIsEditingSummary(true)}
+              >
+                Sửa
+              </button>
+            </div>
+          </div>
+          <button className="btn btn-sm" onClick={() => setShowSummary(false)}>Đóng (ESC)</button>
+        </div>
+      )}
+    </>
+  );
+
+  const renderTextOrSummary = () => (
+    showSummary ? (
+      isEditingSummary ? (
+        <textarea
+          className="form-textarea"
+          style={{ width: '100%', height: isPagedMode ? '100%' : '400px', minHeight: isPagedMode ? 0 : '400px', padding: 16, fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, border: 'none', background: 'transparent', resize: isPagedMode ? 'none' : 'vertical' }}
+          placeholder="Dán bản giải thích / tóm tắt từ AI vào đây (Hỗ trợ Markdown)..."
+          value={sutta.summaryContent || ''}
+          onChange={e => updateSutta(sutta.id, { summaryContent: e.target.value })}
+          autoFocus
+        />
+      ) : (
+        <div className="markdown-body" style={{ fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6 }}>
+          {sutta.summaryContent ? (
+            <ReactMarkdown>{sutta.summaryContent}</ReactMarkdown>
+          ) : (
+            <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: 40 }}>
+              Chưa có nội dung. Bấm "Sửa" để dán bản giải thích vào đây.
+            </div>
+          )}
+        </div>
+      )
+    ) : (
+      <FullEditor
+        sutta={sutta}
+        isMobile={isMobile}
+        isPagedMode={isPagedMode}
+        annotationMode={annotationMode}
+        onShowPopup={setPopup}
+        onOpenFindReplace={handleOpenFindReplace}
+        onShowTooltip={(data) => {
+          if (!isPopupMode) {
+            if (data && data.pinned) {
+              const sidebarItem = document.getElementById(`sidebar-anno-${data.annotationId}`);
+              if (sidebarItem) {
+                sidebarItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                const originalBg = sidebarItem.style.background;
+                sidebarItem.style.background = 'var(--bg3)';
+                setTimeout(() => sidebarItem.style.background = originalBg, 1500);
+              }
+            }
+            return;
+          }
+          if (!data && tooltip && tooltip.pinned) return;
+          setTooltip(data);
+        }}
+        updateSuttaContent={updateSuttaContent}
+      />
+    )
+  );
+
   return (
     <div className="reader-container" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', position: 'relative', background: 'var(--bg)', color: 'var(--text)' }}>
       {/* Sleek Reading Progress Bar */}
@@ -1016,132 +1203,7 @@ export default function SuttaReader({ sutta }) {
           )}
 
           <div className="paged-header">
-            <h1 className="sutta-title" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {title: e.target.innerText})}>{sutta.title}</h1>
-            {sutta.subtitle && <div className="sutta-subtitle" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {subtitle: e.target.innerText})}>{sutta.subtitle}</div>}
-
-            <div 
-              className="sutta-metadata" 
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 16,
-                fontSize: '13px',
-                color: 'var(--text-muted)',
-                marginBottom: '16px',
-                marginTop: sutta.subtitle ? '-16px' : '0px',
-                borderBottom: '1px dashed var(--border)',
-                paddingBottom: '12px',
-                flexWrap: 'wrap',
-              }}
-              id="sutta-metadata-bar"
-            >
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                ⏱️ <strong>Thời gian đọc:</strong> ~{readingTime.minutes} phút
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                📝 <strong>Độ dài:</strong> {readingTime.words.toLocaleString()} từ
-              </span>
-              {/* Hidden Audio File Input */}
-              <input
-                type="file"
-                ref={audioFileInputRef}
-                accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac"
-                style={{ display: 'none' }}
-                onChange={handleUploadAudioFile}
-              />
-
-              {hasCachedAudio ? (
-                <>
-                  <button
-                    className="btn btn-sm btn-ghost"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '4px 10px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      border: '1.5px solid var(--annotation-color)',
-                      color: 'var(--annotation-color)',
-                    }}
-                    onClick={() => handleStartPodcast(false)}
-                    title="Phát file Audio đã lưu"
-                  >
-                    ▶ Nghe Podcast (Đã lưu)
-                  </button>
-                  <button
-                    className="btn btn-sm btn-ghost"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '4px 10px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => audioFileInputRef.current?.click()}
-                    title="Tải lên file Audio MP3/WAV mới thay thế bản lưu hiện tại"
-                  >
-                    📤 Đổi file Audio
-                  </button>
-                </>
-              ) : (
-                <button
-                  className="btn btn-sm btn-primary"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '4px 10px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => audioFileInputRef.current?.click()}
-                  title="Tải file audio từ máy tính của bạn (MP3, WAV, M4A...)"
-                >
-                  📤 Tải file Audio lên
-                </button>
-              )}
-              {sutta.scrollPosition > 10 && (
-                <>
-                  <span style={{ color: 'var(--border)' }}>|</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--annotation-color)', fontWeight: 500 }}>
-                    🔖 <strong>Đang đọc dở</strong> (Khôi phục tự động)
-                  </span>
-                </>
-              )}
-            </div>
-
-            {showSummary && (
-              <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Bản giải thích (Tóm tắt)</span>
-                  <div style={{ display: 'flex', background: 'var(--bg)', borderRadius: 4, padding: 2, border: '1px solid var(--border)' }}>
-                    <button
-                      className={`btn btn-sm ${!isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
-                      style={{ border: 'none', borderRadius: 3 }}
-                      onClick={() => setIsEditingSummary(false)}
-                    >
-                      Xem
-                    </button>
-                    <button
-                      className={`btn btn-sm ${isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
-                      style={{ border: 'none', borderRadius: 3 }}
-                      onClick={() => setIsEditingSummary(true)}
-                    >
-                      Sửa
-                    </button>
-                  </div>
-                </div>
-                <button className="btn btn-sm" onClick={() => setShowSummary(false)}>Đóng (ESC)</button>
-              </div>
-            )}
+            {renderHeaderAndMetadata()}
           </div>
 
           <div 
@@ -1171,53 +1233,7 @@ export default function SuttaReader({ sutta }) {
             </div>
 
             <div className="paged-body">
-              {showSummary ? (
-                isEditingSummary ? (
-                  <textarea
-                    className="form-textarea"
-                    style={{ width: '100%', height: '100%', padding: 16, fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, border: 'none', background: 'transparent', resize: 'none' }}
-                    placeholder="Dán bản giải thích / tóm tắt từ AI vào đây (Hỗ trợ Markdown)..."
-                    value={sutta.summaryContent || ''}
-                    onChange={e => updateSutta(sutta.id, { summaryContent: e.target.value })}
-                    autoFocus
-                  />
-                ) : (
-                  <div className="markdown-body" style={{ fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6 }}>
-                    {sutta.summaryContent ? (
-                      <ReactMarkdown>{sutta.summaryContent}</ReactMarkdown>
-                    ) : (
-                      <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: 40 }}>
-                        Chưa có nội dung. Bấm "Sửa" để dán bản giải thích vào đây.
-                      </div>
-                    )}
-                  </div>
-                )
-              ) : (
-                <FullEditor
-                  sutta={sutta}
-                  isMobile={isMobile}
-                  annotationMode={annotationMode}
-                  onShowPopup={setPopup}
-                  onOpenFindReplace={handleOpenFindReplace}
-                  onShowTooltip={(data) => {
-                    if (!isPopupMode) {
-                      if (data && data.pinned) {
-                        const sidebarItem = document.getElementById(`sidebar-anno-${data.annotationId}`);
-                        if (sidebarItem) {
-                          sidebarItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                          const originalBg = sidebarItem.style.background;
-                          sidebarItem.style.background = 'var(--bg3)';
-                          setTimeout(() => sidebarItem.style.background = originalBg, 1500);
-                        }
-                      }
-                      return;
-                    }
-                    if (!data && tooltip && tooltip.pinned) return;
-                    setTooltip(data);
-                  }}
-                  updateSuttaContent={updateSuttaContent}
-                />
-              )}
+              {renderTextOrSummary()}
             </div>
           </div>
 
@@ -1317,7 +1333,8 @@ export default function SuttaReader({ sutta }) {
           )}
 
           <div className="editor-inner">
-            {renderSuttaMainContent()}
+            {renderHeaderAndMetadata()}
+            {renderTextOrSummary()}
           </div>
 
           {tooltip && sutta.annotations && sutta.annotations[tooltip.annotationId] && (

@@ -972,13 +972,16 @@ input[type="color"] { opacity: 0; width: 0; height: 0; position: absolute; }
   padding: 8px 20px 16px;
   position: relative;
   overflow: hidden;
+  container-type: inline-size;
 }
 
 .paged-mode .full-editor,
 .paged-mode .markdown-body {
+  display: block !important;
+  box-sizing: border-box !important;
   height: 100% !important;
   width: 100% !important;
-  column-width: 100% !important;
+  column-width: 100cqw !important;
   column-gap: 40px !important;
   column-fill: auto !important;
   overflow-x: auto !important;
@@ -993,11 +996,19 @@ input[type="color"] { opacity: 0; width: 0; height: 0; position: absolute; }
   display: none !important;
 }
 
-.paged-mode .sutta-paragraph,
+.paged-mode h1,
 .paged-mode h2,
 .paged-mode h3,
-.paged-mode p {
+.paged-mode h4 {
+  break-after: avoid-column;
   break-inside: avoid-column;
+}
+
+.paged-mode .sutta-paragraph,
+.paged-mode p,
+.paged-mode div,
+.paged-mode blockquote {
+  break-inside: auto !important;
 }
 
 .page-click-zone {
