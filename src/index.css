@@ -951,10 +951,20 @@ input[type="color"] { opacity: 0; width: 0; height: 0; position: absolute; }
   min-height: 0;
   position: relative;
   overflow: hidden;
-  padding: 24px var(--editor-padding-x, 15%) 12px;
+  padding: 24px 0 12px;
 }
 
 .paged-content {
+  height: 100%;
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.paged-column-container {
   height: 100%;
   width: 100%;
   column-width: 100%;
@@ -965,15 +975,18 @@ input[type="color"] { opacity: 0; width: 0; height: 0; position: absolute; }
   scroll-behavior: smooth;
 }
 
-.paged-content .editor-inner {
-  height: 100%;
+.paged-column-container .editor-inner,
+.paged-column-container .full-editor,
+.paged-column-container .markdown-body {
+  display: contents;
 }
 
-.paged-content .sutta-title,
-.paged-content .sutta-subtitle,
-.paged-content .sutta-metadata,
-.paged-content h2,
-.paged-content h3 {
+.paged-column-container .sutta-title,
+.paged-column-container .sutta-subtitle,
+.paged-column-container .sutta-metadata,
+.paged-column-container h2,
+.paged-column-container h3,
+.paged-column-container p {
   break-inside: avoid-column;
 }
 

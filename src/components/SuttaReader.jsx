@@ -1222,8 +1222,8 @@ export default function SuttaReader({ sutta }) {
             </div>
 
             {/* Paged Content Container */}
-            <div className="paged-content" ref={pagedContentRef}>
-              <div className="editor-inner">
+            <div className="paged-content">
+              <div className="paged-column-container" ref={pagedContentRef}>
                 {renderSuttaMainContent()}
               </div>
             </div>
