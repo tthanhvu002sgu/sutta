@@ -167,7 +167,7 @@ export function AppProvider({ children }) {
     const response = await fetch(`https://api.github.com/gists/${cleanGistId}`, {
       method: 'PATCH',
       headers: {
-        'Authorization': `token ${cleanToken}`,
+        'Authorization': `Bearer ${cleanToken}`,
         'Accept': 'application/vnd.github.v3+json',
       },
       body: JSON.stringify({
@@ -180,6 +180,9 @@ export function AppProvider({ children }) {
     });
     if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));
+      if (response.status === 401 || errJson.message === 'Bad credentials') {
+        throw new Error('GitHub Token không hợp lệ hoặc đã hết hạn (Bad credentials). Vui lòng tạo Token mới trên GitHub và dán vào mục Cài đặt.');
+      }
       throw new Error(errJson.message || `Lỗi khi lưu lên Gist (HTTP ${response.status})`);
     }
   }
@@ -198,12 +201,15 @@ export function AppProvider({ children }) {
     }
     const response = await fetch(`https://api.github.com/gists/${cleanGistId}`, {
       headers: {
-        'Authorization': `token ${cleanToken}`,
+        'Authorization': `Bearer ${cleanToken}`,
         'Accept': 'application/vnd.github.v3+json',
       }
     });
     if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));
+      if (response.status === 401 || errJson.message === 'Bad credentials') {
+        throw new Error('GitHub Token không hợp lệ hoặc đã hết hạn (Bad credentials). Vui lòng tạo Token mới trên GitHub và dán vào mục Cài đặt.');
+      }
       throw new Error(errJson.message || `Lỗi khi tải từ Gist (HTTP ${response.status})`);
     }
     const data = await response.json();
