@@ -639,6 +639,8 @@ export default function SuttaReader({ sutta }) {
     }
   };
 
+  const readingTime = useMemo(() => calculateReadingTime(sutta), [sutta]);
+
   const getActiveColumnContainer = useCallback(() => {
     return document.querySelector('.paged-mode .full-editor') || document.querySelector('.paged-mode .markdown-body');
   }, []);
