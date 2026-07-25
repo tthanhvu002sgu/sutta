@@ -1134,10 +1134,9 @@ input[type="color"] { opacity: 0; width: 0; height: 0; position: absolute; }
 }
 
 /* Deep Mode (Zen / Focus Mode) */
-.app.deep-mode .sidebar,
+.app.deep-mode .sidebar:not(.right-sidebar),
 .app.deep-mode .topbar,
 .app.deep-mode .toolbar,
-.app.deep-mode .resizer-right,
 .app.deep-mode #reading-progress-bar-container,
 .app.deep-mode .paged-header .sutta-metadata {
   display: none !important;

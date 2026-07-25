@@ -6,7 +6,7 @@ import Settings from './components/Settings';
 import UploadModal from './components/UploadModal';
 
 function AppShell() {
-  const { activeSutta, view, annotationMode, setAnnotationMode, settings, updateSetting, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed, setAutoScrollSpeed, isDeepMode, setIsDeepMode, showAnnotations, setShowAnnotations } = useApp();
+  const { activeSutta, view, annotationMode, setAnnotationMode, settings, updateSetting, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed, setAutoScrollSpeed, isDeepMode, setIsDeepMode, showRightSidebar, setShowRightSidebar } = useApp();
   const [showUpload, setShowUpload] = useState(false);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(300);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -194,16 +194,16 @@ function AppShell() {
   };
 
   return (
-    <div className={`app${isDeepMode ? ' deep-mode' : ''}${!showAnnotations ? ' hide-annotations' : ''}`}>
+    <div className={`app${isDeepMode ? ' deep-mode' : ''}`}>
       {isDeepMode && (
         <div className="deep-mode-floating-bar">
           <button
-            className={`btn btn-sm ${showAnnotations ? 'btn-ghost' : 'btn-primary'}`}
-            onClick={() => setShowAnnotations(!showAnnotations)}
-            title={showAnnotations ? 'Tắt hiển thị từ chú giải' : 'Bật hiển thị từ chú giải'}
+            className={`btn btn-sm ${showRightSidebar ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setShowRightSidebar(!showRightSidebar)}
+            title={showRightSidebar ? 'Ẩn Sidebar chú giải' : 'Hiện Sidebar chú giải'}
             style={{ fontSize: 12, padding: '3px 10px' }}
           >
-            {showAnnotations ? '🏷️ Chú giải: ON' : '🙈 Chú giải: OFF'}
+            {showRightSidebar ? '📝 Sidebar Chú giải: ON' : '📝 Sidebar Chú giải: OFF'}
           </button>
           <button
             className="btn btn-sm btn-primary"
@@ -236,7 +236,7 @@ function AppShell() {
               {annotationCount > 0 && (
                 <span className="tag">{annotationCount} chú thích</span>
               )}
-              {settings.annotationDisplay === 'sidebar' && annotationCount > 0 && (
+              {annotationCount > 0 && (
                 <button className="icon-btn mobile-right-menu-btn" onClick={() => setMobileRightSidebarOpen(true)} title="Xem chú thích">
                   📝
                 </button>
@@ -259,13 +259,13 @@ function AppShell() {
             </button>
 
             <button
-              className={`btn btn-sm ${showAnnotations ? 'btn-ghost' : 'btn-ghost'}`}
-              onClick={() => setShowAnnotations(!showAnnotations)}
-              title={showAnnotations ? 'Tắt hiển thị chú giải trong bài kinh' : 'Bật hiển thị chú giải trong bài kinh'}
-              id="toolbar-toggle-annotations"
-              style={{ opacity: showAnnotations ? 1 : 0.6 }}
+              className={`btn btn-sm ${showRightSidebar ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setShowRightSidebar(!showRightSidebar)}
+              title={showRightSidebar ? 'Ẩn Sidebar danh sách chú thích' : 'Mở Sidebar danh sách chú thích'}
+              id="toolbar-toggle-right-sidebar"
+              style={{ padding: '4px 8px' }}
             >
-              {showAnnotations ? '🏷️ Chú giải: ON' : '🙈 Chú giải: OFF'}
+              {showRightSidebar ? '📝 Sidebar Chú giải: ON' : '📝 Sidebar Chú giải: OFF'}
             </button>
 
             <div className="toolbar-sep" />
@@ -466,7 +466,7 @@ function AppShell() {
         )}
       </div>
 
-      {view === 'reader' && activeSutta && settings.annotationDisplay === 'sidebar' && (
+      {view === 'reader' && activeSutta && (settings.annotationDisplay === 'sidebar' || showRightSidebar) && (
         <>
           <div
             className="resizer-right desktop-only"
