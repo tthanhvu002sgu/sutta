@@ -6,7 +6,7 @@ import Settings from './components/Settings';
 import UploadModal from './components/UploadModal';
 
 function AppShell() {
-  const { activeSutta, view, annotationMode, setAnnotationMode, settings, updateSetting, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed, setAutoScrollSpeed } = useApp();
+  const { activeSutta, view, annotationMode, setAnnotationMode, settings, updateSetting, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed, setAutoScrollSpeed, isDeepMode, setIsDeepMode, showAnnotations, setShowAnnotations } = useApp();
   const [showUpload, setShowUpload] = useState(false);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(300);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -33,14 +33,19 @@ function AppShell() {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'q') {
+      if (e.key === 'F11' || e.code === 'F11') {
+        e.preventDefault();
+        setIsDeepMode(prev => !prev);
+      } else if (e.key === 'Escape' && isDeepMode) {
+        setIsDeepMode(false);
+      } else if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'q') {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('shortcut-annotate'));
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [isDeepMode, setIsDeepMode]);
 
   const annotationCount = activeSutta
     ? Object.keys(activeSutta.annotations || {}).length
@@ -189,7 +194,28 @@ function AppShell() {
   };
 
   return (
-    <div className="app">
+    <div className={`app${isDeepMode ? ' deep-mode' : ''}${!showAnnotations ? ' hide-annotations' : ''}`}>
+      {isDeepMode && (
+        <div className="deep-mode-floating-bar">
+          <button
+            className={`btn btn-sm ${showAnnotations ? 'btn-ghost' : 'btn-primary'}`}
+            onClick={() => setShowAnnotations(!showAnnotations)}
+            title={showAnnotations ? 'Tắt hiển thị từ chú giải' : 'Bật hiển thị từ chú giải'}
+            style={{ fontSize: 12, padding: '3px 10px' }}
+          >
+            {showAnnotations ? '🏷️ Chú giải: ON' : '🙈 Chú giải: OFF'}
+          </button>
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => setIsDeepMode(false)}
+            title="Thoát Chế độ đọc tập trung (Phím F11 hoặc ESC)"
+            style={{ fontSize: 12, padding: '3px 12px' }}
+          >
+            ✕ Thoát Deep Mode (F11 / ESC)
+          </button>
+        </div>
+      )}
+
       <Sidebar onUpload={() => { setShowUpload(true); setMobileSidebarOpen(false); }} mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} />
 
       <div className="main">
@@ -222,6 +248,28 @@ function AppShell() {
         {/* Toolbar (only for reader with a sutta) */}
         {view === 'reader' && activeSutta && (
           <div className="toolbar">
+            <button
+              className={`btn btn-sm ${isDeepMode ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setIsDeepMode(!isDeepMode)}
+              title="Chế độ đọc tập trung - Ẩn toàn bộ nút bấm & thanh công cụ (Phím tắt F11)"
+              id="toolbar-deep-mode"
+              style={{ fontWeight: 600 }}
+            >
+              🧘 Deep Mode (F11)
+            </button>
+
+            <button
+              className={`btn btn-sm ${showAnnotations ? 'btn-ghost' : 'btn-ghost'}`}
+              onClick={() => setShowAnnotations(!showAnnotations)}
+              title={showAnnotations ? 'Tắt hiển thị chú giải trong bài kinh' : 'Bật hiển thị chú giải trong bài kinh'}
+              id="toolbar-toggle-annotations"
+              style={{ opacity: showAnnotations ? 1 : 0.6 }}
+            >
+              {showAnnotations ? '🏷️ Chú giải: ON' : '🙈 Chú giải: OFF'}
+            </button>
+
+            <div className="toolbar-sep" />
+
             <button
               className={`btn btn-sm ${showSummary ? 'btn-primary' : ''}`}
               onClick={() => setShowSummary(!showSummary)}

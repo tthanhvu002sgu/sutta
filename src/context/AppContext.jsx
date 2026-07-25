@@ -28,6 +28,8 @@ export function AppProvider({ children }) {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [autoScroll, setAutoScroll] = useState(false);
   const [autoScrollSpeed, setAutoScrollSpeed] = useState(1);
+  const [isDeepMode, setIsDeepMode] = useState(false);
+  const [showAnnotations, setShowAnnotations] = useState(true);
 
   // Initial load
   useEffect(() => {
@@ -239,6 +241,8 @@ export function AppProvider({ children }) {
       showSummary, setShowSummary,
       autoScroll, setAutoScroll,
       autoScrollSpeed, setAutoScrollSpeed,
+      isDeepMode, setIsDeepMode,
+      showAnnotations, setShowAnnotations,
       settings, updateSetting,
       addSutta, deleteSutta, updateSutta,
       addAnnotation, removeAnnotation,

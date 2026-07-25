@@ -1133,6 +1133,58 @@ input[type="color"] { opacity: 0; width: 0; height: 0; position: absolute; }
   cursor: pointer;
 }
 
+/* Deep Mode (Zen / Focus Mode) */
+.app.deep-mode .sidebar,
+.app.deep-mode .topbar,
+.app.deep-mode .toolbar,
+.app.deep-mode .resizer-right,
+.app.deep-mode #reading-progress-bar-container,
+.app.deep-mode .paged-header .sutta-metadata {
+  display: none !important;
+}
+
+.app.deep-mode .paged-header {
+  padding-top: 16px !important;
+  border-bottom: none !important;
+}
+
+.app.deep-mode .main {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+}
+
+.deep-mode-floating-bar {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  opacity: 0.35;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.deep-mode-floating-bar:hover {
+  opacity: 1;
+  transform: translateY(2px);
+}
+
+/* Hide Annotations Toggle */
+.hide-annotations mark.annotated {
+  color: inherit !important;
+  border-bottom: none !important;
+  background: transparent !important;
+  cursor: default !important;
+  padding: 0 !important;
+}
+
 
 
 
