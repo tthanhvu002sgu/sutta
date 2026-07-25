@@ -232,6 +232,30 @@ function AppShell() {
 
             <div className="toolbar-sep" />
 
+            <span className="toolbar-label">Chế độ đọc:</span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                className={`btn btn-sm ${settings.readingMode !== 'paged' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => updateSetting('readingMode', 'scroll')}
+                title="Cuộn liên tục"
+                style={{ padding: '4px 8px' }}
+                id="toolbar-mode-scroll"
+              >
+                📜 Cuộn
+              </button>
+              <button
+                className={`btn btn-sm ${settings.readingMode === 'paged' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => updateSetting('readingMode', 'paged')}
+                title="Lật từng trang"
+                style={{ padding: '4px 8px' }}
+                id="toolbar-mode-paged"
+              >
+                📖 Lật trang
+              </button>
+            </div>
+
+            <div className="toolbar-sep" />
+
             <button
               className={`btn btn-sm ${autoScroll ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => setAutoScroll(!autoScroll)}

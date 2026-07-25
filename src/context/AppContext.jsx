@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS = {
   lineHeight: 1.5,
   letterSpacing: 0.01,
   paddingX: 15,
+  readingMode: 'scroll',
 };
 
 export function AppProvider({ children }) {

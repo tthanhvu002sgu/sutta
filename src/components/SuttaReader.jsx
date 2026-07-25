@@ -526,6 +526,15 @@ export default function SuttaReader({ sutta }) {
   const [findReplace, setFindReplace] = useState({ visible: false, findText: '', focusReplace: false });
   const scrollAreaRef = useRef();
   
+  // Paged mode state & refs
+  const isPagedMode = settings.readingMode === 'paged';
+  const pagedContentRef = useRef(null);
+  const pagedWrapperRef = useRef(null);
+  const touchStartXRef = useRef(0);
+  const touchStartYRef = useRef(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
   // Podcast Voice State
   const [podcastState, setPodcastState] = useState({
     open: false,
@@ -632,82 +641,240 @@ export default function SuttaReader({ sutta }) {
 
   const readingTime = useMemo(() => calculateReadingTime(sutta), [sutta]);
 
+  // Calculate pagination in Paged mode
+  const calculatePagination = useCallback(() => {
+    if (!isPagedMode || !pagedContentRef.current) return;
+    const el = pagedContentRef.current;
+    const width = el.clientWidth;
+    const gap = 40;
+    const columnSpan = width + gap;
+    if (width <= 0) return;
+
+    const scrollWidth = el.scrollWidth;
+    const calculatedPages = Math.max(1, Math.round((scrollWidth + gap) / columnSpan));
+    setTotalPages(calculatedPages);
+
+    const page = Math.min(calculatedPages, Math.max(1, Math.round(el.scrollLeft / columnSpan) + 1));
+    setCurrentPage(page);
+
+    const progressVal = calculatedPages > 1 ? ((page - 1) / (calculatedPages - 1)) * 100 : 100;
+    setProgress(progressVal);
+  }, [isPagedMode]);
+
+  const goToPage = useCallback((targetPage) => {
+    if (!pagedContentRef.current) return;
+    const el = pagedContentRef.current;
+    const width = el.clientWidth;
+    const gap = 40;
+    const columnSpan = width + gap;
+
+    const validPage = Math.min(totalPages, Math.max(1, targetPage));
+    const targetScrollLeft = (validPage - 1) * columnSpan;
+
+    el.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
+    setCurrentPage(validPage);
+
+    const progressVal = totalPages > 1 ? ((validPage - 1) / (totalPages - 1)) * 100 : 100;
+    setProgress(progressVal);
+
+    if (scrollSaveTimeoutRef.current) clearTimeout(scrollSaveTimeoutRef.current);
+    scrollSaveTimeoutRef.current = setTimeout(() => {
+      updateSutta(sutta.id, { scrollPosition: targetScrollLeft });
+    }, 800);
+  }, [totalPages, sutta.id, updateSutta]);
+
   useEffect(() => {
-    let animationFrameId;
-    let lastTime = performance.now();
-    let fractionalScroll = 0;
+    if (!isPagedMode || !pagedContentRef.current) return;
+    const el = pagedContentRef.current;
+    calculatePagination();
 
-    const scrollLoop = (time) => {
-      if (autoScroll && scrollAreaRef.current) {
-        const delta = time - lastTime;
-        // Speed scaling: 1 = ~10px/s, 5 = ~50px/s, etc.
-        const scrollAmount = (autoScrollSpeed * 20 * delta) / 1000;
-        
-        fractionalScroll += scrollAmount;
-        if (fractionalScroll >= 1) {
-          const pixelsToScroll = Math.floor(fractionalScroll);
-          scrollAreaRef.current.scrollTop += pixelsToScroll;
-          fractionalScroll -= pixelsToScroll;
+    const observer = new ResizeObserver(() => {
+      calculatePagination();
+    });
+    observer.observe(el);
+
+    const timer = setTimeout(calculatePagination, 150);
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    };
+  }, [isPagedMode, calculatePagination, sutta.id, sutta.htmlContent, sutta.summaryContent, settings.fontSize, settings.fontFamily, settings.lineHeight, settings.paddingX, showSummary]);
+
+  // Wheel events in Paged mode
+  useEffect(() => {
+    if (!isPagedMode || !pagedWrapperRef.current) return;
+    const wrapper = pagedWrapperRef.current;
+
+    let wheelTimeout = null;
+    const handleWheel = (e) => {
+      if (Math.abs(e.deltaY) > 10 || Math.abs(e.deltaX) > 10) {
+        e.preventDefault();
+        if (wheelTimeout) return;
+
+        if (e.deltaY > 0 || e.deltaX > 0) {
+          goToPage(currentPage + 1);
+        } else if (e.deltaY < 0 || e.deltaX < 0) {
+          goToPage(currentPage - 1);
         }
 
-        // Auto-stop when reached bottom
-        if (scrollAreaRef.current.scrollTop + scrollAreaRef.current.clientHeight >= scrollAreaRef.current.scrollHeight - 1) {
-          setAutoScroll(false);
-        }
+        wheelTimeout = setTimeout(() => {
+          wheelTimeout = null;
+        }, 250);
       }
-      lastTime = time;
-      animationFrameId = requestAnimationFrame(scrollLoop);
     };
 
-    if (autoScroll) {
+    wrapper.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      wrapper.removeEventListener('wheel', handleWheel);
+      if (wheelTimeout) clearTimeout(wheelTimeout);
+    };
+  }, [isPagedMode, currentPage, goToPage]);
+
+  // Keyboard navigation in Paged mode
+  useEffect(() => {
+    if (!isPagedMode) return;
+
+    const handleKeyDown = (e) => {
+      const active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+        return;
+      }
+
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        e.preventDefault();
+        goToPage(currentPage + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        goToPage(currentPage - 1);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        goToPage(1);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        goToPage(totalPages);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPagedMode, currentPage, totalPages, goToPage]);
+
+  // Touch events in Paged mode
+  const handleTouchStart = (e) => {
+    if (!isPagedMode) return;
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!isPagedMode) return;
+    const diffX = e.changedTouches[0].clientX - touchStartXRef.current;
+    const diffY = e.changedTouches[0].clientY - touchStartYRef.current;
+
+    if (Math.abs(diffX) > 40 && Math.abs(diffX) > Math.abs(diffY)) {
+      if (diffX < 0) {
+        goToPage(currentPage + 1);
+      } else {
+        goToPage(currentPage - 1);
+      }
+    }
+  };
+
+  // Auto-scroll effect
+  useEffect(() => {
+    if (!autoScroll) return;
+
+    if (isPagedMode) {
+      const intervalMs = Math.max(1500, (15 / autoScrollSpeed) * 1000);
+      const intervalId = setInterval(() => {
+        setCurrentPage(prev => {
+          if (prev >= totalPages) {
+            setAutoScroll(false);
+            return prev;
+          }
+          const nextPage = prev + 1;
+          if (pagedContentRef.current) {
+            const width = pagedContentRef.current.clientWidth;
+            const gap = 40;
+            pagedContentRef.current.scrollTo({ left: (nextPage - 1) * (width + gap), behavior: 'smooth' });
+          }
+          return nextPage;
+        });
+      }, intervalMs);
+
+      return () => clearInterval(intervalId);
+    } else {
+      let animationFrameId;
+      let lastTime = performance.now();
+      let fractionalScroll = 0;
+
+      const scrollLoop = (time) => {
+        if (autoScroll && scrollAreaRef.current) {
+          const delta = time - lastTime;
+          const scrollAmount = (autoScrollSpeed * 20 * delta) / 1000;
+          
+          fractionalScroll += scrollAmount;
+          if (fractionalScroll >= 1) {
+            const pixelsToScroll = Math.floor(fractionalScroll);
+            scrollAreaRef.current.scrollTop += pixelsToScroll;
+            fractionalScroll -= pixelsToScroll;
+          }
+
+          if (scrollAreaRef.current.scrollTop + scrollAreaRef.current.clientHeight >= scrollAreaRef.current.scrollHeight - 1) {
+            setAutoScroll(false);
+          }
+        }
+        lastTime = time;
+        animationFrameId = requestAnimationFrame(scrollLoop);
+      };
+
       lastTime = performance.now();
       animationFrameId = requestAnimationFrame(scrollLoop);
-    }
 
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [autoScroll, autoScrollSpeed, setAutoScroll]);
+      return () => cancelAnimationFrame(animationFrameId);
+    }
+  }, [autoScroll, autoScrollSpeed, isPagedMode, totalPages, setAutoScroll]);
 
   // Restore scroll position when loading/switching sutta
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      const savedScroll = sutta.scrollPosition || 0;
-      
-      const timer = setTimeout(() => {
-        if (scrollAreaRef.current) {
-          scrollAreaRef.current.scrollTop = savedScroll;
-          
-          // Calculate initial progress
-          const scrollTop = scrollAreaRef.current.scrollTop;
-          const scrollHeight = scrollAreaRef.current.scrollHeight;
-          const clientHeight = scrollAreaRef.current.clientHeight;
-          const maxScroll = scrollHeight - clientHeight;
-          const progressVal = maxScroll > 0 ? (scrollTop / maxScroll) * 100 : 0;
-          setProgress(progressVal);
-        }
-      }, 150);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [sutta.id]);
+    const savedScroll = sutta.scrollPosition || 0;
 
-  // Scroll handler for progress bar and auto-bookmarking
+    const timer = setTimeout(() => {
+      if (isPagedMode && pagedContentRef.current) {
+        pagedContentRef.current.scrollLeft = savedScroll;
+        calculatePagination();
+      } else if (!isPagedMode && scrollAreaRef.current) {
+        scrollAreaRef.current.scrollTop = savedScroll;
+
+        const scrollTop = scrollAreaRef.current.scrollTop;
+        const scrollHeight = scrollAreaRef.current.scrollHeight;
+        const clientHeight = scrollAreaRef.current.clientHeight;
+        const maxScroll = scrollHeight - clientHeight;
+        const progressVal = maxScroll > 0 ? (scrollTop / maxScroll) * 100 : 0;
+        setProgress(progressVal);
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [sutta.id, isPagedMode, calculatePagination]);
+
+  // Scroll handler for progress bar and auto-bookmarking in Scroll Mode
   const handleScroll = useCallback(() => {
-    if (!scrollAreaRef.current) return;
-    
+    if (!scrollAreaRef.current || isPagedMode) return;
+
     const scrollTop = scrollAreaRef.current.scrollTop;
     const scrollHeight = scrollAreaRef.current.scrollHeight;
     const clientHeight = scrollAreaRef.current.clientHeight;
-    
+
     const maxScroll = scrollHeight - clientHeight;
     const progressVal = maxScroll > 0 ? (scrollTop / maxScroll) * 100 : 0;
     setProgress(progressVal);
-    
-    // Save scroll position with a debounce of 800ms to avoid performance hit
+
     if (scrollSaveTimeoutRef.current) clearTimeout(scrollSaveTimeoutRef.current);
     scrollSaveTimeoutRef.current = setTimeout(() => {
       updateSutta(sutta.id, { scrollPosition: scrollTop });
     }, 800);
-  }, [sutta.id, updateSutta]);
+  }, [sutta.id, updateSutta, isPagedMode]);
 
   useEffect(() => {
     return () => {
@@ -792,6 +959,202 @@ export default function SuttaReader({ sutta }) {
     return () => window.removeEventListener('edit-annotation', handleEdit);
   }, []);
 
+  const renderSuttaMainContent = () => (
+    <>
+      <h1 className="sutta-title" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {title: e.target.innerText})}>{sutta.title}</h1>
+      {sutta.subtitle && <div className="sutta-subtitle" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {subtitle: e.target.innerText})}>{sutta.subtitle}</div>}
+
+      {/* Estimated Reading Time & Word Count Metadata Bar */}
+      <div 
+        className="sutta-metadata" 
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          fontSize: '13px',
+          color: 'var(--text-muted)',
+          marginBottom: '28px',
+          marginTop: sutta.subtitle ? '-16px' : '0px',
+          borderBottom: '1px dashed var(--border)',
+          paddingBottom: '12px',
+          flexWrap: 'wrap',
+        }}
+        id="sutta-metadata-bar"
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          ⏱️ <strong>Thời gian đọc:</strong> ~{readingTime.minutes} phút
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          📝 <strong>Độ dài:</strong> {readingTime.words.toLocaleString()} từ
+        </span>
+        {/* Hidden Audio File Input */}
+        <input
+          type="file"
+          ref={audioFileInputRef}
+          accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac"
+          style={{ display: 'none' }}
+          onChange={handleUploadAudioFile}
+        />
+
+        {hasCachedAudio ? (
+          <>
+            <button
+              className="btn btn-sm btn-ghost"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px',
+                fontSize: '12px',
+                fontWeight: 600,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                border: '1.5px solid var(--annotation-color)',
+                color: 'var(--annotation-color)',
+              }}
+              onClick={() => handleStartPodcast(false)}
+              title="Phát file Audio đã lưu"
+            >
+              ▶ Nghe Podcast (Đã lưu)
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px',
+                fontSize: '12px',
+                fontWeight: 600,
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+              onClick={() => audioFileInputRef.current?.click()}
+              title="Tải lên file Audio MP3/WAV mới thay thế bản lưu hiện tại"
+            >
+              📤 Đổi file Audio
+            </button>
+          </>
+        ) : (
+          <button
+            className="btn btn-sm btn-primary"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              fontSize: '12px',
+              fontWeight: 600,
+              borderRadius: '6px',
+              cursor: 'pointer',
+            }}
+            onClick={() => audioFileInputRef.current?.click()}
+            title="Tải file audio từ máy tính của bạn (MP3, WAV, M4A...)"
+          >
+            📤 Tải file Audio lên
+          </button>
+        )}
+        {sutta.scrollPosition > 10 && (
+          <>
+            <span style={{ color: 'var(--border)' }}>|</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--annotation-color)', fontWeight: 500 }}>
+              🔖 <strong>Đang đọc dở</strong> (Khôi phục tự động)
+            </span>
+          </>
+        )}
+      </div>
+
+      {showSummary && (
+        <div style={{ marginBottom: 16, padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', breakInside: 'avoid-column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Bản giải thích (Tóm tắt)</span>
+            <div style={{ display: 'flex', background: 'var(--bg)', borderRadius: 4, padding: 2, border: '1px solid var(--border)' }}>
+              <button
+                className={`btn btn-sm ${!isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ border: 'none', borderRadius: 3 }}
+                onClick={() => setIsEditingSummary(false)}
+              >
+                Xem
+              </button>
+              <button
+                className={`btn btn-sm ${isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ border: 'none', borderRadius: 3 }}
+                onClick={() => setIsEditingSummary(true)}
+              >
+                Sửa
+              </button>
+            </div>
+          </div>
+          <button className="btn btn-sm" onClick={() => setShowSummary(false)}>Đóng (ESC)</button>
+        </div>
+      )}
+
+      {showSummary ? (
+        isEditingSummary ? (
+          <textarea
+            className="form-textarea"
+            style={{ width: '100%', minHeight: '400px', padding: 16, fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, border: 'none', background: 'transparent', resize: 'vertical' }}
+            placeholder="Dán bản giải thích / tóm tắt từ AI vào đây (Hỗ trợ Markdown)..."
+            value={sutta.summaryContent || ''}
+            onChange={e => updateSutta(sutta.id, { summaryContent: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.ctrlKey && e.key === 'h') {
+                e.preventDefault();
+                const selStart = e.target.selectionStart;
+                const selEnd = e.target.selectionEnd;
+                const selText = e.target.value.substring(selStart, selEnd);
+                handleOpenFindReplace(selText, false);
+              }
+              if (e.ctrlKey && e.key === 'd') {
+                e.preventDefault();
+                const selStart = e.target.selectionStart;
+                const selEnd = e.target.selectionEnd;
+                const selText = e.target.value.substring(selStart, selEnd);
+                handleOpenFindReplace(selText, true);
+              }
+            }}
+            autoFocus
+          />
+        ) : (
+          <div className="markdown-body" style={{ padding: '0 16px', fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, minHeight: 400 }}>
+            {sutta.summaryContent ? (
+              <ReactMarkdown>{sutta.summaryContent}</ReactMarkdown>
+            ) : (
+              <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: 40 }}>
+                Chưa có nội dung. Bấm "Sửa" để dán bản giải thích vào đây.
+              </div>
+            )}
+          </div>
+        )
+      ) : (
+        <FullEditor
+          sutta={sutta}
+          isMobile={isMobile}
+          annotationMode={annotationMode}
+          onShowPopup={setPopup}
+          onOpenFindReplace={handleOpenFindReplace}
+          onShowTooltip={(data) => {
+            if (!isPopupMode) {
+              if (data && data.pinned) {
+                const sidebarItem = document.getElementById(`sidebar-anno-${data.annotationId}`);
+                if (sidebarItem) {
+                  sidebarItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  const originalBg = sidebarItem.style.background;
+                  sidebarItem.style.background = 'var(--bg3)';
+                  setTimeout(() => sidebarItem.style.background = originalBg, 1500);
+                }
+              }
+              return;
+            }
+            if (!data && tooltip && tooltip.pinned) return;
+            setTooltip(data);
+          }}
+          updateSuttaContent={updateSuttaContent}
+        />
+      )}
+    </>
+  );
+
   return (
     <div className="reader-container" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', position: 'relative', background: 'var(--bg)', color: 'var(--text)' }}>
       {/* Sleek Reading Progress Bar */}
@@ -816,260 +1179,201 @@ export default function SuttaReader({ sutta }) {
         />
       </div>
 
-      <div className="editor-area" onClick={() => {}} onScroll={handleScroll} style={{ position: 'relative', flex: 1, overflowY: 'auto' }} ref={scrollAreaRef}>
-        {findReplace.visible && (
-          <FindReplaceBar
-            findText={findReplace.findText}
-            setFindText={(text) => setFindReplace(prev => ({ ...prev, findText: text }))}
-            focusReplace={findReplace.focusReplace}
-            onClose={() => setFindReplace(prev => ({ ...prev, visible: false }))}
-            updateSuttaContent={updateSuttaContent}
-            isEditingSummary={isEditingSummary}
-            summaryContent={sutta.summaryContent}
-            suttaId={sutta.id}
-            updateSutta={updateSutta}
-          />
-        )}
-        <div className="editor-inner">
-          <h1 className="sutta-title" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {title: e.target.innerText})}>{sutta.title}</h1>
-          {sutta.subtitle && <div className="sutta-subtitle" contentEditable={!isMobile} suppressContentEditableWarning onBlur={e => updateSutta(sutta.id, {subtitle: e.target.innerText})}>{sutta.subtitle}</div>}
-
-          {/* Estimated Reading Time & Word Count Metadata Bar */}
-          <div 
-            className="sutta-metadata" 
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 16,
-              fontSize: '13px',
-              color: 'var(--text-muted)',
-              marginBottom: '28px',
-              marginTop: sutta.subtitle ? '-16px' : '0px',
-              borderBottom: '1px dashed var(--border)',
-              paddingBottom: '12px',
-              flexWrap: 'wrap',
-            }}
-            id="sutta-metadata-bar"
-          >
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              ⏱️ <strong>Thời gian đọc:</strong> ~{readingTime.minutes} phút
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              📝 <strong>Độ dài:</strong> {readingTime.words.toLocaleString()} từ
-            </span>
-            {/* Hidden Audio File Input */}
-            <input
-              type="file"
-              ref={audioFileInputRef}
-              accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac"
-              style={{ display: 'none' }}
-              onChange={handleUploadAudioFile}
+      {isPagedMode ? (
+        <div className="editor-area paged-mode" style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {findReplace.visible && (
+            <FindReplaceBar
+              findText={findReplace.findText}
+              setFindText={(text) => setFindReplace(prev => ({ ...prev, findText: text }))}
+              focusReplace={findReplace.focusReplace}
+              onClose={() => setFindReplace(prev => ({ ...prev, visible: false }))}
+              updateSuttaContent={updateSuttaContent}
+              isEditingSummary={isEditingSummary}
+              summaryContent={sutta.summaryContent}
+              suttaId={sutta.id}
+              updateSutta={updateSutta}
             />
-
-            {hasCachedAudio ? (
-              <>
-                <button
-                  className="btn btn-sm btn-ghost"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '4px 10px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    border: '1.5px solid var(--annotation-color)',
-                    color: 'var(--annotation-color)',
-                  }}
-                  onClick={() => handleStartPodcast(false)}
-                  title="Phát file Audio đã lưu"
-                >
-                  ▶ Nghe Podcast (Đã lưu)
-                </button>
-                <button
-                  className="btn btn-sm btn-ghost"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '4px 10px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => audioFileInputRef.current?.click()}
-                  title="Tải lên file Audio MP3/WAV mới thay thế bản lưu hiện tại"
-                >
-                  📤 Đổi file Audio
-                </button>
-              </>
-            ) : (
-              <button
-                className="btn btn-sm btn-primary"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '4px 10px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                }}
-                onClick={() => audioFileInputRef.current?.click()}
-                title="Tải file audio từ máy tính của bạn (MP3, WAV, M4A...)"
-              >
-                📤 Tải file Audio lên
-              </button>
-            )}
-            {sutta.scrollPosition > 10 && (
-              <>
-                <span style={{ color: 'var(--border)' }}>|</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--annotation-color)', fontWeight: 500 }}>
-                  🔖 <strong>Đang đọc dở</strong> (Khôi phục tự động)
-                </span>
-              </>
-            )}
-          </div>
-
-          {showSummary && (
-            <div style={{ marginBottom: 16, padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Bản giải thích (Tóm tắt)</span>
-                <div style={{ display: 'flex', background: 'var(--bg)', borderRadius: 4, padding: 2, border: '1px solid var(--border)' }}>
-                  <button
-                    className={`btn btn-sm ${!isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
-                    style={{ border: 'none', borderRadius: 3 }}
-                    onClick={() => setIsEditingSummary(false)}
-                  >
-                    Xem
-                  </button>
-                  <button
-                    className={`btn btn-sm ${isEditingSummary ? 'btn-primary' : 'btn-ghost'}`}
-                    style={{ border: 'none', borderRadius: 3 }}
-                    onClick={() => setIsEditingSummary(true)}
-                  >
-                    Sửa
-                  </button>
-                </div>
-              </div>
-              <button className="btn btn-sm" onClick={() => setShowSummary(false)}>Đóng (ESC)</button>
-            </div>
           )}
 
-          {showSummary ? (
-            isEditingSummary ? (
-              <textarea
-                className="form-textarea"
-                style={{ width: '100%', minHeight: '400px', padding: 16, fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, border: 'none', background: 'transparent', resize: 'vertical' }}
-                placeholder="Dán bản giải thích / tóm tắt từ AI vào đây (Hỗ trợ Markdown)..."
-                value={sutta.summaryContent || ''}
-                onChange={e => updateSutta(sutta.id, { summaryContent: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.ctrlKey && e.key === 'h') {
-                    e.preventDefault();
-                    const selStart = e.target.selectionStart;
-                    const selEnd = e.target.selectionEnd;
-                    const selText = e.target.value.substring(selStart, selEnd);
-                    handleOpenFindReplace(selText, false);
-                  }
-                  if (e.ctrlKey && e.key === 'd') {
-                    e.preventDefault();
-                    const selStart = e.target.selectionStart;
-                    const selEnd = e.target.selectionEnd;
-                    const selText = e.target.value.substring(selStart, selEnd);
-                    handleOpenFindReplace(selText, true);
-                  }
-                }}
-                autoFocus
-              />
-            ) : (
-              <div className="markdown-body" style={{ padding: '0 16px', fontSize: 'var(--font-size)', fontFamily: 'var(--font-family)', lineHeight: 1.6, minHeight: 400 }}>
-                {sutta.summaryContent ? (
-                  <ReactMarkdown>{sutta.summaryContent}</ReactMarkdown>
-                ) : (
-                  <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: 40 }}>
-                    Chưa có nội dung. Bấm "Sửa" để dán bản giải thích vào đây.
-                  </div>
-                )}
+          <div 
+            className="paged-wrapper" 
+            ref={pagedWrapperRef}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            {/* Left Page Click Zone */}
+            <div 
+              className="page-click-zone left" 
+              onClick={() => goToPage(currentPage - 1)}
+              title="Trang trước (Phím ←)"
+              style={{ display: currentPage > 1 ? 'flex' : 'none' }}
+            >
+              <span className="zone-arrow">‹</span>
+            </div>
+
+            {/* Right Page Click Zone */}
+            <div 
+              className="page-click-zone right" 
+              onClick={() => goToPage(currentPage + 1)}
+              title="Trang sau (Phím →)"
+              style={{ display: currentPage < totalPages ? 'flex' : 'none' }}
+            >
+              <span className="zone-arrow">›</span>
+            </div>
+
+            {/* Paged Content Container */}
+            <div className="paged-content" ref={pagedContentRef}>
+              <div className="editor-inner">
+                {renderSuttaMainContent()}
               </div>
-            )
-          ) : (
-            <FullEditor
-              sutta={sutta}
-              isMobile={isMobile}
-              annotationMode={annotationMode}
-              onShowPopup={setPopup}
-              onOpenFindReplace={handleOpenFindReplace}
-              onShowTooltip={(data) => {
-                if (!isPopupMode) {
-                  if (data && data.pinned) {
-                    // If in sidebar mode and clicked, maybe highlight the sidebar item instead of showing popup
-                    const sidebarItem = document.getElementById(`sidebar-anno-${data.annotationId}`);
-                    if (sidebarItem) {
-                      sidebarItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                      const originalBg = sidebarItem.style.background;
-                      sidebarItem.style.background = 'var(--bg3)';
-                      setTimeout(() => sidebarItem.style.background = originalBg, 1500);
-                    }
-                  }
-                  return;
-                }
-                if (!data && tooltip && tooltip.pinned) return;
-                setTooltip(data);
+            </div>
+          </div>
+
+          {/* Paged Navigation Bar */}
+          <div className="paged-nav-bar">
+            <button 
+              className="btn btn-sm btn-ghost paged-nav-btn" 
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={currentPage <= 1}
+            >
+              ◄ Trang trước
+            </button>
+
+            <div className="paged-nav-info">
+              <span>Trang {currentPage} / {totalPages}</span>
+              {totalPages > 1 && (
+                <input 
+                  type="range" 
+                  min="1" 
+                  max={totalPages} 
+                  value={currentPage} 
+                  onChange={(e) => goToPage(Number(e.target.value))}
+                  className="paged-slider"
+                  title={`Kéo để đến trang 1 - ${totalPages}`}
+                />
+              )}
+            </div>
+
+            <button 
+              className="btn btn-sm btn-ghost paged-nav-btn" 
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+            >
+              Trang sau ►
+            </button>
+          </div>
+
+          {tooltip && sutta.annotations && sutta.annotations[tooltip.annotationId] && (
+            <AnnotationTooltip
+              annotation={sutta.annotations[tooltip.annotationId]}
+              x={tooltip.x}
+              y={tooltip.y}
+              pinned={tooltip.pinned}
+              onClose={() => setTooltip(null)}
+              onEdit={() => { 
+                setPopup({ annotationId: tooltip.annotationId, initialWord: tooltip.word, target: tooltip.target }); 
+                setTooltip(null); 
               }}
-              updateSuttaContent={updateSuttaContent}
+              annotationId={tooltip.annotationId}
+              suttaId={sutta.id}
+              onRemoveMark={handleRemoveMark}
+            />
+          )}
+
+          {popup && (
+            <AnnotationPopup
+              annotationId={popup.annotationId}
+              initialWord={popup.initialWord}
+              suttaId={sutta.id}
+              onClose={() => setPopup(null)}
+              onRemoveMark={handleRemoveMark}
+            />
+          )}
+
+          {podcastState.open && (
+            <PodcastPlayer
+              title={podcastState.title}
+              audioUrl={podcastState.audioUrl}
+              isLoading={podcastState.loading}
+              statusMessage={podcastState.statusMessage}
+              progressPercent={podcastState.progressPercent}
+              usedModel={podcastState.usedModel}
+              isFallbackUsed={podcastState.isFallbackUsed}
+              isCached={podcastState.isCached}
+              error={podcastState.error}
+              onClose={() => setPodcastState((prev) => ({ ...prev, open: false }))}
+              onRetry={() => handleStartPodcast(false)}
+              onRegenerate={() => handleStartPodcast(true)}
+              onDeleteCache={handleDeletePodcastCache}
             />
           )}
         </div>
+      ) : (
+        <div className="editor-area" onClick={() => {}} onScroll={handleScroll} style={{ position: 'relative', flex: 1, overflowY: 'auto' }} ref={scrollAreaRef}>
+          {findReplace.visible && (
+            <FindReplaceBar
+              findText={findReplace.findText}
+              setFindText={(text) => setFindReplace(prev => ({ ...prev, findText: text }))}
+              focusReplace={findReplace.focusReplace}
+              onClose={() => setFindReplace(prev => ({ ...prev, visible: false }))}
+              updateSuttaContent={updateSuttaContent}
+              isEditingSummary={isEditingSummary}
+              summaryContent={sutta.summaryContent}
+              suttaId={sutta.id}
+              updateSutta={updateSutta}
+            />
+          )}
 
-        {tooltip && sutta.annotations && sutta.annotations[tooltip.annotationId] && (
-          <AnnotationTooltip
-            annotation={sutta.annotations[tooltip.annotationId]}
-            x={tooltip.x}
-            y={tooltip.y}
-            pinned={tooltip.pinned}
-            onClose={() => setTooltip(null)}
-            onEdit={() => { 
-              setPopup({ annotationId: tooltip.annotationId, initialWord: tooltip.word, target: tooltip.target }); 
-              setTooltip(null); 
-            }}
-            annotationId={tooltip.annotationId}
-            suttaId={sutta.id}
-            onRemoveMark={handleRemoveMark}
-          />
-        )}
+          <div className="editor-inner">
+            {renderSuttaMainContent()}
+          </div>
 
-        {popup && (
-          <AnnotationPopup
-            annotationId={popup.annotationId}
-            initialWord={popup.initialWord}
-            suttaId={sutta.id}
-            onClose={() => setPopup(null)}
-            onRemoveMark={handleRemoveMark}
-          />
-        )}
+          {tooltip && sutta.annotations && sutta.annotations[tooltip.annotationId] && (
+            <AnnotationTooltip
+              annotation={sutta.annotations[tooltip.annotationId]}
+              x={tooltip.x}
+              y={tooltip.y}
+              pinned={tooltip.pinned}
+              onClose={() => setTooltip(null)}
+              onEdit={() => { 
+                setPopup({ annotationId: tooltip.annotationId, initialWord: tooltip.word, target: tooltip.target }); 
+                setTooltip(null); 
+              }}
+              annotationId={tooltip.annotationId}
+              suttaId={sutta.id}
+              onRemoveMark={handleRemoveMark}
+            />
+          )}
 
-        {podcastState.open && (
-          <PodcastPlayer
-            title={podcastState.title}
-            audioUrl={podcastState.audioUrl}
-            isLoading={podcastState.loading}
-            statusMessage={podcastState.statusMessage}
-            progressPercent={podcastState.progressPercent}
-            usedModel={podcastState.usedModel}
-            isFallbackUsed={podcastState.isFallbackUsed}
-            isCached={podcastState.isCached}
-            error={podcastState.error}
-            onClose={() => setPodcastState((prev) => ({ ...prev, open: false }))}
-            onRetry={() => handleStartPodcast(false)}
-            onRegenerate={() => handleStartPodcast(true)}
-            onDeleteCache={handleDeletePodcastCache}
-          />
-        )}
-      </div>
+          {popup && (
+            <AnnotationPopup
+              annotationId={popup.annotationId}
+              initialWord={popup.initialWord}
+              suttaId={sutta.id}
+              onClose={() => setPopup(null)}
+              onRemoveMark={handleRemoveMark}
+            />
+          )}
+
+          {podcastState.open && (
+            <PodcastPlayer
+              title={podcastState.title}
+              audioUrl={podcastState.audioUrl}
+              isLoading={podcastState.loading}
+              statusMessage={podcastState.statusMessage}
+              progressPercent={podcastState.progressPercent}
+              usedModel={podcastState.usedModel}
+              isFallbackUsed={podcastState.isFallbackUsed}
+              isCached={podcastState.isCached}
+              error={podcastState.error}
+              onClose={() => setPodcastState((prev) => ({ ...prev, open: false }))}
+              onRetry={() => handleStartPodcast(false)}
+              onRegenerate={() => handleStartPodcast(true)}
+              onDeleteCache={handleDeletePodcastCache}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

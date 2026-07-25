@@ -936,5 +936,126 @@ input[type="color"] { opacity: 0; width: 0; height: 0; position: absolute; }
   to { transform: rotate(360deg); }
 }
 
+/* Paged Mode Layout */
+.editor-area.paged-mode {
+  overflow: hidden !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+}
+
+.paged-wrapper {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  padding: 24px var(--editor-padding-x, 15%) 12px;
+}
+
+.paged-content {
+  height: 100%;
+  width: 100%;
+  column-width: 100%;
+  column-gap: 40px;
+  column-fill: auto;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+}
+
+.paged-content .editor-inner {
+  height: 100%;
+}
+
+.paged-content .sutta-title,
+.paged-content .sutta-subtitle,
+.paged-content .sutta-metadata,
+.paged-content h2,
+.paged-content h3 {
+  break-inside: avoid-column;
+}
+
+.page-click-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7%;
+  min-width: 36px;
+  max-width: 70px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+  user-select: none;
+}
+
+.page-click-zone:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] .page-click-zone:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.page-click-zone.left { left: 0; }
+.page-click-zone.right { right: 0; }
+
+.page-click-zone .zone-arrow {
+  font-size: 24px;
+  color: var(--text-muted);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.paged-nav-bar {
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border-top: 1.5px solid var(--border);
+  background: var(--bg2);
+  padding: 0 16px;
+  user-select: none;
+  z-index: 30;
+}
+
+.paged-nav-info {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.paged-nav-btn {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.paged-slider {
+  width: 120px;
+  accent-color: var(--annotation-color);
+  cursor: pointer;
+}
+
+
 
 

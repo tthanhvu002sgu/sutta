@@ -132,7 +132,32 @@ export default function Settings() {
 
           <div className="settings-row">
             <div className="settings-row-info">
-              <div className="settings-row-label">Chế độ đọc</div>
+              <div className="settings-row-label">Chế độ lật trang</div>
+              <div className="settings-row-desc">Chọn cuộn dọc liên tục hoặc lật từng trang như đọc sách</div>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                className={`btn btn-sm ${settings.readingMode !== 'paged' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => updateSetting('readingMode', 'scroll')}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                id="setting-mode-scroll"
+              >
+                📜 Cuộn
+              </button>
+              <button
+                className={`btn btn-sm ${settings.readingMode === 'paged' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => updateSetting('readingMode', 'paged')}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                id="setting-mode-paged"
+              >
+                📖 Lật trang
+              </button>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <div className="settings-row-label">Chủ đề giao diện</div>
               <div className="settings-row-desc">Chọn màu nền và chữ tối ưu giảm mỏi mắt</div>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
