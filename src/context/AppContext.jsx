@@ -152,14 +152,22 @@ export function AppProvider({ children }) {
   }
 
   async function syncToGist() {
-    if (!settings.githubToken || !settings.gistId) {
-      throw new Error('Vui lòng cấu hình GitHub Token và Gist ID');
+    const rawToken = settings.githubToken || '';
+    const rawGistId = settings.gistId || '';
+    const cleanToken = rawToken.replace(/[^\x00-\x7F]/g, '').replace(/^(token|bearer)\s+/i, '').trim();
+    let cleanGistId = rawGistId.replace(/[^\x00-\x7F]/g, '').trim();
+    if (cleanGistId.includes('/')) {
+      cleanGistId = cleanGistId.split('/').filter(Boolean).pop();
+    }
+
+    if (!cleanToken || !cleanGistId) {
+      throw new Error('Vui lòng cấu hình GitHub Token và Gist ID hợp lệ');
     }
     const dataStr = JSON.stringify(suttas, null, 2);
-    const response = await fetch(`https://api.github.com/gists/${settings.gistId}`, {
+    const response = await fetch(`https://api.github.com/gists/${cleanGistId}`, {
       method: 'PATCH',
       headers: {
-        'Authorization': `token ${settings.githubToken}`,
+        'Authorization': `token ${cleanToken}`,
         'Accept': 'application/vnd.github.v3+json',
       },
       body: JSON.stringify({
@@ -170,20 +178,34 @@ export function AppProvider({ children }) {
         }
       })
     });
-    if (!response.ok) throw new Error('Lỗi khi lưu lên Gist');
+    if (!response.ok) {
+      const errJson = await response.json().catch(() => ({}));
+      throw new Error(errJson.message || `Lỗi khi lưu lên Gist (HTTP ${response.status})`);
+    }
   }
 
   async function syncFromGist() {
-    if (!settings.githubToken || !settings.gistId) {
-      throw new Error('Vui lòng cấu hình GitHub Token và Gist ID');
+    const rawToken = settings.githubToken || '';
+    const rawGistId = settings.gistId || '';
+    const cleanToken = rawToken.replace(/[^\x00-\x7F]/g, '').replace(/^(token|bearer)\s+/i, '').trim();
+    let cleanGistId = rawGistId.replace(/[^\x00-\x7F]/g, '').trim();
+    if (cleanGistId.includes('/')) {
+      cleanGistId = cleanGistId.split('/').filter(Boolean).pop();
     }
-    const response = await fetch(`https://api.github.com/gists/${settings.gistId}`, {
+
+    if (!cleanToken || !cleanGistId) {
+      throw new Error('Vui lòng cấu hình GitHub Token và Gist ID hợp lệ');
+    }
+    const response = await fetch(`https://api.github.com/gists/${cleanGistId}`, {
       headers: {
-        'Authorization': `token ${settings.githubToken}`,
+        'Authorization': `token ${cleanToken}`,
         'Accept': 'application/vnd.github.v3+json',
       }
     });
-    if (!response.ok) throw new Error('Lỗi khi tải từ Gist');
+    if (!response.ok) {
+      const errJson = await response.json().catch(() => ({}));
+      throw new Error(errJson.message || `Lỗi khi tải từ Gist (HTTP ${response.status})`);
+    }
     const data = await response.json();
     const file = data.files['sutta-backup.json'];
     if (!file) throw new Error('Không tìm thấy file sutta-backup.json trong Gist');

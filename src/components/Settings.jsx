@@ -325,7 +325,10 @@ export default function Settings() {
               type="password"
               className="text-input"
               value={settings.githubToken || ''}
-              onChange={e => updateSetting('githubToken', e.target.value)}
+              onChange={e => {
+                const clean = e.target.value.replace(/[^\x00-\x7F]/g, '').trim();
+                updateSetting('githubToken', clean);
+              }}
               placeholder="ghp_..."
               style={{ width: '200px' }}
             />
@@ -340,7 +343,13 @@ export default function Settings() {
               type="text"
               className="text-input"
               value={settings.gistId || ''}
-              onChange={e => updateSetting('gistId', e.target.value)}
+              onChange={e => {
+                let clean = e.target.value.replace(/[^\x00-\x7F]/g, '').trim();
+                if (clean.includes('/')) {
+                  clean = clean.split('/').filter(Boolean).pop();
+                }
+                updateSetting('gistId', clean);
+              }}
               placeholder="e.g. 1a2b3c..."
               style={{ width: '200px' }}
             />
