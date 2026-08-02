@@ -248,166 +248,140 @@ function AppShell() {
         {/* Toolbar (only for reader with a sutta) */}
         {view === 'reader' && activeSutta && (
           <div className="toolbar">
-            <button
-              className={`btn btn-sm ${isDeepMode ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setIsDeepMode(!isDeepMode)}
-              title="Chế độ đọc tập trung - Ẩn toàn bộ nút bấm & thanh công cụ (Phím tắt F11)"
-              id="toolbar-deep-mode"
-              style={{ fontWeight: 600 }}
-            >
-              🧘 Deep Mode (F11)
-            </button>
-
-            <button
-              className={`btn btn-sm ${showRightSidebar ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setShowRightSidebar(!showRightSidebar)}
-              title={showRightSidebar ? 'Ẩn Sidebar danh sách chú thích' : 'Mở Sidebar danh sách chú thích'}
-              id="toolbar-toggle-right-sidebar"
-              style={{ padding: '4px 8px' }}
-            >
-              {showRightSidebar ? '📝 Sidebar Chú giải: ON' : '📝 Sidebar Chú giải: OFF'}
-            </button>
-
-            <div className="toolbar-sep" />
-
-            <button
-              className={`btn btn-sm ${showSummary ? 'btn-primary' : ''}`}
-              onClick={() => setShowSummary(!showSummary)}
-              title={showSummary ? 'Quay lại Nội dung Kinh (ESC)' : 'Mở bản giải thích / tóm tắt'}
-            >
-              {showSummary ? '📖 Bản giải thích' : '📖 Bản giải thích'}
-            </button>
-
-            <div className="toolbar-sep" />
-
-            <span className="toolbar-label">Chế độ đọc:</span>
-            <div style={{ display: 'flex', gap: 4 }}>
+            {/* Group: View modes */}
+            <div className="toolbar-group">
               <button
-                className={`btn btn-sm ${settings.readingMode !== 'paged' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => updateSetting('readingMode', 'scroll')}
-                title="Cuộn liên tục"
-                style={{ padding: '4px 8px' }}
-                id="toolbar-mode-scroll"
+                className={`tbar-btn ${isDeepMode ? 'active' : ''}`}
+                onClick={() => setIsDeepMode(!isDeepMode)}
+                title="Chế độ đọc tập trung (F11)"
+                id="toolbar-deep-mode"
               >
-                📜 Cuộn
+                🧘 Focus
               </button>
               <button
-                className={`btn btn-sm ${settings.readingMode === 'paged' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => updateSetting('readingMode', 'paged')}
-                title="Lật từng trang"
-                style={{ padding: '4px 8px' }}
-                id="toolbar-mode-paged"
+                className={`tbar-btn ${showSummary ? 'active' : ''}`}
+                onClick={() => setShowSummary(!showSummary)}
+                title={showSummary ? 'Quay lại bản kinh gốc' : 'Xem bản giải thích / tóm tắt'}
               >
-                📖 Lật trang
+                📖 Giải thích
+              </button>
+              <button
+                className={`tbar-btn ${showRightSidebar ? 'active' : ''}`}
+                onClick={() => setShowRightSidebar(!showRightSidebar)}
+                title={showRightSidebar ? 'Ẩn panel chú giải' : 'Hiện panel chú giải'}
+                id="toolbar-toggle-right-sidebar"
+              >
+                📝 Chú giải
               </button>
             </div>
 
             <div className="toolbar-sep" />
 
-            <button
-              className={`btn btn-sm ${autoScroll ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setAutoScroll(!autoScroll)}
-              title="Tự động cuộn trang"
-            >
-              {autoScroll ? '⏸ Dừng cuộn' : '▶ Tự động cuộn'}
-            </button>
-            
-            {autoScroll && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span className="toolbar-label">Tốc độ:</span>
-                <input 
-                  type="number" 
+            {/* Group: Reading mode */}
+            <div className="toolbar-group">
+              <button
+                className={`tbar-btn ${settings.readingMode !== 'paged' ? 'active' : ''}`}
+                onClick={() => updateSetting('readingMode', 'scroll')}
+                title="Chế độ cuộn liên tục"
+                id="toolbar-mode-scroll"
+              >
+                ≡ Cuộn
+              </button>
+              <button
+                className={`tbar-btn ${settings.readingMode === 'paged' ? 'active' : ''}`}
+                onClick={() => updateSetting('readingMode', 'paged')}
+                title="Chế độ lật trang"
+                id="toolbar-mode-paged"
+              >
+                ▣ Lật trang
+              </button>
+            </div>
+
+            <div className="toolbar-sep" />
+
+            {/* Group: Auto scroll */}
+            <div className="toolbar-group">
+              <button
+                className={`tbar-btn ${autoScroll ? 'active' : ''}`}
+                onClick={() => setAutoScroll(!autoScroll)}
+                title="Tự động cuộn trang"
+              >
+                {autoScroll ? '⏸ Dừng' : '▶ Tự cuộn'}
+              </button>
+              {autoScroll && (
+                <input
+                  type="number"
                   className="number-input"
-                  min="0.5" 
-                  max="50" 
+                  min="0.5"
+                  max="50"
                   step="0.5"
                   value={autoScrollSpeed}
                   onChange={(e) => setAutoScrollSpeed(Math.max(0.1, Number(e.target.value)))}
-                  style={{ width: 60 }}
+                  style={{ width: 48 }}
+                  title="Tốc độ cuộn"
                 />
-              </div>
-            )}
-
-            <div className="toolbar-sep" />
-
-            <span className="toolbar-label">Font:</span>
-            <select
-              className="select-input"
-              value={settings.fontFamily}
-              onChange={e => updateSetting('fontFamily', e.target.value)}
-              id="toolbar-font"
-            >
-              <option value="Lora">Lora</option>
-              <option value="Times New Roman">Times New Roman</option>
-              <option value="Google Sans">Google Sans</option>
-            </select>
-
-            <div className="toolbar-sep" />
-
-            <span className="toolbar-label">Cỡ chữ:</span>
-            <button
-              className="icon-btn"
-              style={{ border: '1px solid var(--border)', borderRadius: 3 }}
-              onClick={() => updateSetting('fontSize', Math.max(12, settings.fontSize - 1))}
-            >−</button>
-            <input
-              type="number"
-              className="number-input"
-              value={settings.fontSize}
-              min={12} max={28}
-              onChange={e => updateSetting('fontSize', Math.max(12, Math.min(28, +e.target.value)))}
-              id="toolbar-fontsize"
-            />
-            <button
-              className="icon-btn"
-              style={{ border: '1px solid var(--border)', borderRadius: 3 }}
-              onClick={() => updateSetting('fontSize', Math.min(28, settings.fontSize + 1))}
-            >+</button>
-
-            <div className="toolbar-sep" />
-
-            <span className="toolbar-label">Giao diện:</span>
-            <div style={{ display: 'flex', gap: 4 }}>
-              <button
-                className={`btn btn-sm ${settings.theme === 'light' || !settings.theme ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => updateSetting('theme', 'light')}
-                title="Giao diện Sáng (Mặc định)"
-                style={{ padding: '4px 8px' }}
-              >
-                ☀️
-              </button>
-              <button
-                className={`btn btn-sm ${settings.theme === 'dark' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => updateSetting('theme', 'dark')}
-                title="Giao diện Tối"
-                style={{ padding: '4px 8px' }}
-              >
-                🌙
-              </button>
-              <button
-                className={`btn btn-sm ${settings.theme === 'sepia' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => updateSetting('theme', 'sepia')}
-                title="Giao diện Sepia"
-                style={{ padding: '4px 8px' }}
-              >
-                📖
-              </button>
+              )}
             </div>
 
             <div className="toolbar-sep" />
 
-            <span className="toolbar-label">Màu chú thích:</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Group: Appearance */}
+            <div className="toolbar-group">
+              {/* Theme toggle */}
+              <button
+                className={`tbar-btn tbar-icon ${settings.theme === 'light' || !settings.theme ? 'active' : ''}`}
+                onClick={() => updateSetting('theme', 'light')}
+                title="Sáng"
+              >☀️</button>
+              <button
+                className={`tbar-btn tbar-icon ${settings.theme === 'sepia' ? 'active' : ''}`}
+                onClick={() => updateSetting('theme', 'sepia')}
+                title="Sepia"
+              >🌅</button>
+              <button
+                className={`tbar-btn tbar-icon ${settings.theme === 'dark' ? 'active' : ''}`}
+                onClick={() => updateSetting('theme', 'dark')}
+                title="Tối"
+              >🌙</button>
+
+              <div className="tbar-divider" />
+
+              {/* Font */}
+              <select
+                className="tbar-select"
+                value={settings.fontFamily}
+                onChange={e => updateSetting('fontFamily', e.target.value)}
+                id="toolbar-font"
+                title="Font chữ"
+              >
+                <option value="Lora">Lora</option>
+                <option value="Times New Roman">Times</option>
+                <option value="Google Sans">Sans</option>
+              </select>
+
+              <div className="tbar-divider" />
+
+              {/* Font size */}
+              <button
+                className="tbar-btn tbar-icon"
+                onClick={() => updateSetting('fontSize', Math.max(12, settings.fontSize - 1))}
+                title="Giảm cỡ chữ"
+              >A−</button>
+              <span className="tbar-value" id="toolbar-fontsize">{settings.fontSize}</span>
+              <button
+                className="tbar-btn tbar-icon"
+                onClick={() => updateSetting('fontSize', Math.min(28, settings.fontSize + 1))}
+                title="Tăng cỡ chữ"
+              >A+</button>
+
+              <div className="tbar-divider" />
+
+              {/* Annotation color */}
               <div
-                style={{
-                  width: 22, height: 22,
-                  background: settings.annotationColor,
-                  border: '1.5px solid var(--border)',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                }}
+                className="tbar-color-swatch"
+                style={{ background: settings.annotationColor }}
                 onClick={() => document.getElementById('toolbar-color-input')?.click()}
-                title="Chọn màu chú thích"
+                title="Màu chú thích"
               />
               <input
                 id="toolbar-color-input"
@@ -418,44 +392,44 @@ function AppShell() {
               />
             </div>
 
-            <div className="toolbar-sep" />
+            {/* Spacer push actions to right */}
+            <div style={{ flex: 1 }} />
 
-            <div style={{ position: 'relative' }}>
-              <button className="btn btn-sm" onClick={() => setShowExportMenu(!showExportMenu)} title="Xuất ra file văn bản có kèm chú thích">
-                ⬇ Xuất file
+            {/* Group: Actions */}
+            <div className="toolbar-group">
+              <div style={{ position: 'relative' }}>
+                <button
+                  className="tbar-btn"
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  title="Xuất file có kèm chú thích"
+                >
+                  ⬇ Xuất file
+                </button>
+                {showExportMenu && (
+                  <>
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 90 }} onClick={() => setShowExportMenu(false)} />
+                    <div style={{
+                      position: 'absolute', top: '100%', right: 0, marginTop: 4,
+                      background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6,
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 100,
+                      display: 'flex', flexDirection: 'column', minWidth: 170,
+                      padding: '4px 0', overflow: 'hidden',
+                    }}>
+                      <button className="tbar-menu-item" onClick={handleExportHtml}>📄 HTML</button>
+                      <button className="tbar-menu-item" onClick={handleExportMd}>📝 Markdown</button>
+                    </div>
+                  </>
+                )}
+              </div>
+              <button
+                className="tbar-btn tbar-btn-accent"
+                onClick={() => copyShareUrl(true)}
+                title="Sao chép URL chia sẻ"
+                id="toolbar-copy-share-url"
+              >
+                🔗 Chia sẻ
               </button>
-              {showExportMenu && (
-                <>
-                  <div style={{ position: 'fixed', inset: 0, zIndex: 90 }} onClick={() => setShowExportMenu(false)} />
-                  <div style={{
-                    position: 'absolute', top: '100%', right: 0, marginTop: 4,
-                    background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 100,
-                    display: 'flex', flexDirection: 'column', minWidth: 160,
-                    padding: '4px 0'
-                  }}>
-                    <button className="btn btn-ghost" style={{ justifyContent: 'flex-start', borderRadius: 0, padding: '8px 12px', borderBottom: 'none' }} onClick={handleExportHtml}>
-                      📄 Định dạng HTML
-                    </button>
-                    <button className="btn btn-ghost" style={{ justifyContent: 'flex-start', borderRadius: 0, padding: '8px 12px', borderBottom: 'none' }} onClick={handleExportMd}>
-                      📝 Định dạng Markdown
-                    </button>
-                  </div>
-                </>
-              )}
             </div>
-
-            <div className="toolbar-sep" />
-
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={() => copyShareUrl(true)}
-              title="Sao chép URL bài kinh & cài đặt hiện tại để gửi cho người khác"
-              id="toolbar-copy-share-url"
-              style={{ fontWeight: 500 }}
-            >
-              🔗 Chia sẻ URL
-            </button>
           </div>
         )}
 
