@@ -6,7 +6,7 @@ import Settings from './components/Settings';
 import UploadModal from './components/UploadModal';
 
 function AppShell() {
-  const { activeSutta, view, annotationMode, setAnnotationMode, settings, updateSetting, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed, setAutoScrollSpeed, isDeepMode, setIsDeepMode, showRightSidebar, setShowRightSidebar, copyShareUrl, toastMessage } = useApp();
+  const { activeSutta, view, annotationMode, setAnnotationMode, settings, updateSetting, showSummary, setShowSummary, autoScroll, setAutoScroll, autoScrollSpeed, setAutoScrollSpeed, isDeepMode, setIsDeepMode, showRightSidebar, setShowRightSidebar, copyShareUrl, toastMessage, removeAnnotation } = useApp();
   const [showUpload, setShowUpload] = useState(false);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(300);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -72,6 +72,23 @@ function AppShell() {
       }
     });
 
+    const standaloneList = Object.entries(activeSutta.annotations || {}).filter(([id, anno]) => anno.standalone || (id && id.startsWith('anno-standalone-')));
+    let standaloneHtml = '';
+    if (standaloneList.length > 0) {
+      standaloneHtml = `
+      <div class="sutta-standalone-section" style="margin-top: 40px; padding-top: 20px; border-top: 2px dashed ${settings.annotationColor};">
+        <h2 style="font-size: 1.3em; margin-bottom: 16px;">📌 Chú giải chung</h2>
+        <ul style="list-style-type: none; padding-left: 0;">
+          ${standaloneList.map(([_, anno]) => `
+            <li style="margin-bottom: 12px; padding: 10px 14px; background: #fdfdfd; border-left: 3px solid ${settings.annotationColor}; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+              ${anno.word ? `<strong style="display: block; margin-bottom: 4px; color: ${settings.annotationColor};">${anno.word}</strong>` : ''}
+              <div>${anno.note}</div>
+            </li>
+          `).join('')}
+        </ul>
+      </div>`;
+    }
+
     const fontMap = {
       'Lora': "'Lora', serif",
       'Times New Roman': "'Times New Roman', serif",
@@ -119,6 +136,7 @@ function AppShell() {
   <h1>${activeSutta.title || 'Không có tiêu đề'}</h1>
   ${activeSutta.subtitle ? `<div class="sutta-subtitle">${activeSutta.subtitle}</div>` : ''}
   ${tempDiv.innerHTML}
+  ${standaloneHtml}
 </body>
 </html>`;
 
@@ -180,6 +198,18 @@ function AppShell() {
     // Clean up extra newlines
     mdText = mdText.replace(/\n{3,}/g, '\n\n');
     md += mdText.trim();
+
+    const standaloneList = Object.entries(activeSutta.annotations || {}).filter(([id, anno]) => anno.standalone || (id && id.startsWith('anno-standalone-')));
+    if (standaloneList.length > 0) {
+      md += '\n\n## 📌 Chú giải chung\n\n';
+      standaloneList.forEach(([_, anno]) => {
+        if (anno.word) {
+          md += `- **${anno.word}**: ${anno.note}\n\n`;
+        } else {
+          md += `- ${anno.note}\n\n`;
+        }
+      });
+    }
 
     const blob = new Blob([md], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
@@ -461,40 +491,112 @@ function AppShell() {
           />
           {mobileRightSidebarOpen && <div className="sidebar-overlay right-sidebar-overlay" onClick={() => setMobileRightSidebarOpen(false)} />}
           <div className={`sidebar right-sidebar${mobileRightSidebarOpen ? ' mobile-open' : ''}`} style={{ width: rightSidebarWidth, minWidth: rightSidebarWidth, borderRight: 'none', borderLeft: 'none' }}>
-            <div className="sidebar-header" style={{ justifyContent: 'center', position: 'relative' }}>
-              <button className="icon-btn mobile-close-btn right-sidebar-close" onClick={() => setMobileRightSidebarOpen(false)} style={{ position: 'absolute', left: 10 }}>✕</button>
-              <div className="sidebar-logo">DANH SÁCH CHÚ THÍCH</div>
+            <div className="sidebar-header" style={{ justifyContent: 'space-between', alignItems: 'center', position: 'relative', padding: '12px 14px' }}>
+              <button className="icon-btn mobile-close-btn right-sidebar-close" onClick={() => setMobileRightSidebarOpen(false)} style={{ marginRight: 6 }}>✕</button>
+              <div className="sidebar-logo" style={{ fontSize: 13, letterSpacing: 1, whiteSpace: 'nowrap' }}>CHÚ GIẢI</div>
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => window.dispatchEvent(new CustomEvent('create-standalone-annotation'))}
+                title="Thêm chú giải trực tiếp (không cần bôi đen văn bản)"
+                style={{ padding: '3px 8px', fontSize: 11, marginLeft: 'auto' }}
+              >
+                + Thêm chú giải
+              </button>
             </div>
             <div className="sidebar-list" style={{ padding: 12 }}>
               {Object.entries(activeSutta.annotations || {}).length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', marginTop: 20 }}>Chưa có chú thích nào.</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', marginTop: 20, lineHeight: 1.6 }}>
+                  Chưa có chú giải nào.<br />
+                  Bấm <strong>"+ Thêm chú giải"</strong> ở trên hoặc bôi đen văn bản để tạo chú thích.
+                </div>
               ) : (
-                Object.entries(activeSutta.annotations).map(([id, anno]) => (
-                  <div
-                    key={id}
-                    id={`sidebar-anno-${id}`}
-                    style={{ marginBottom: 12, padding: '12px 40px 12px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', transition: 'border-color 0.15s', position: 'relative' }}
-                    onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--text)'}
-                    onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
-                    onClick={() => {
-                      const mark = document.querySelector(`mark[data-annotation-id="${id}"]`);
-                      if (mark) {
-                        mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        const originalBg = mark.style.background;
-                        mark.style.background = 'color-mix(in srgb, var(--annotation-color) 25%, transparent)';
-                        setTimeout(() => mark.style.background = originalBg, 1500);
-                        if (window.innerWidth <= 768) {
-                          setMobileRightSidebarOpen(false);
+                Object.entries(activeSutta.annotations).map(([id, anno]) => {
+                  const isStandalone = anno.standalone || (id && id.startsWith('anno-standalone-'));
+                  return (
+                    <div
+                      key={id}
+                      id={`sidebar-anno-${id}`}
+                      style={{
+                        marginBottom: 12,
+                        padding: '12px 40px 12px 12px',
+                        background: 'var(--bg)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        transition: 'border-color 0.15s, box-shadow 0.15s',
+                        position: 'relative'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--text)'}
+                      onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+                      onClick={() => {
+                        if (isStandalone) {
+                          window.dispatchEvent(new CustomEvent('edit-annotation', { detail: { annotationId: id, initialWord: anno.word, isStandalone: true } }));
+                        } else {
+                          const mark = document.querySelector(`mark[data-annotation-id="${id}"]`);
+                          if (mark) {
+                            mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            const originalBg = mark.style.background;
+                            mark.style.background = 'color-mix(in srgb, var(--annotation-color) 25%, transparent)';
+                            setTimeout(() => mark.style.background = originalBg, 1500);
+                            if (window.innerWidth <= 768) {
+                              setMobileRightSidebarOpen(false);
+                            }
+                          }
                         }
-                      }
-                    }}
-                  >
-                    <div style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.5 }}>{anno.note}</div>
-                    <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
-                      <button className="icon-btn" onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('edit-annotation', { detail: { annotationId: id, initialWord: anno.word } })); }} title="Sửa">✎</button>
+                      }}
+                    >
+                      {isStandalone ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                          <span style={{ fontSize: 11, padding: '1px 6px', background: 'rgba(192, 57, 43, 0.12)', color: 'var(--annotation-color)', borderRadius: 3, fontWeight: 600 }}>
+                            📌 {anno.word ? anno.word : 'Chú giải chung'}
+                          </span>
+                        </div>
+                      ) : (
+                        anno.word && (
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--annotation-color)', marginBottom: 4 }}>
+                            {anno.word}
+                          </div>
+                        )
+                      )}
+                      <div style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.5 }}>
+                        {anno.note}
+                      </div>
+                      <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
+                        <button
+                          className="icon-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.dispatchEvent(new CustomEvent('edit-annotation', { detail: { annotationId: id, initialWord: anno.word, isStandalone } }));
+                          }}
+                          title="Sửa"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          className="icon-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm('Xóa chú giải này?')) {
+                              removeAnnotation(activeSutta.id, id);
+                              if (!isStandalone) {
+                                const mark = document.querySelector(`mark[data-annotation-id="${id}"]`);
+                                if (mark) {
+                                  const parent = mark.parentNode;
+                                  while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+                                  parent.removeChild(mark);
+                                }
+                              }
+                            }
+                          }}
+                          title="Xóa"
+                          style={{ color: '#c0392b' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

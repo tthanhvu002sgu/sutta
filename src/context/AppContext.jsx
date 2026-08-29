@@ -321,12 +321,12 @@ export function AppProvider({ children }) {
     setSuttas(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   }
 
-  function addAnnotation(suttaId, tokenKey, word, note) {
+  function addAnnotation(suttaId, tokenKey, word, note, extraProps = {}) {
     setSuttas(prev => prev.map(s => {
       if (s.id !== suttaId) return s;
       return {
         ...s,
-        annotations: { ...s.annotations, [tokenKey]: { word, note } }
+        annotations: { ...s.annotations, [tokenKey]: { word, note, ...extraProps } }
       };
     }));
   }

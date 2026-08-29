@@ -49,9 +49,11 @@ function migrateSuttaToHtml(sutta) {
   return html || '<p class="sutta-paragraph"><br/></p>';
 }
 
-function AnnotationPopup({ annotationId, initialWord, suttaId, onClose, onRemoveMark }) {
+function AnnotationPopup({ annotationId, initialWord, isStandalone, suttaId, onClose, onRemoveMark }) {
   const { addAnnotation, removeAnnotation, activeSutta } = useApp();
   const existing = activeSutta?.annotations?.[annotationId];
+  const standaloneMode = isStandalone || existing?.standalone || (annotationId && annotationId.startsWith('anno-standalone-'));
+  const [word, setWord] = useState(existing?.word || initialWord || '');
   const [note, setNote] = useState(existing?.note || '');
   const ref = useRef();
 
@@ -61,27 +63,51 @@ function AnnotationPopup({ annotationId, initialWord, suttaId, onClose, onRemove
 
   function handleSave() {
     if (!note.trim()) return;
-    addAnnotation(suttaId, annotationId, initialWord, note.trim());
+    addAnnotation(
+      suttaId,
+      annotationId,
+      word.trim(),
+      note.trim(),
+      standaloneMode ? { standalone: true } : {}
+    );
     onClose();
   }
 
   function handleDelete() {
     removeAnnotation(suttaId, annotationId);
-    if (onRemoveMark) onRemoveMark(annotationId);
+    if (!standaloneMode && onRemoveMark) onRemoveMark(annotationId);
     onClose();
   }
 
   return (
     <div className="modal-overlay">
-      <div className="modal" style={{ width: 420 }}>
+      <div className="modal" style={{ width: 440 }}>
+        <div className="modal-title" style={{ fontSize: 16, marginBottom: 16, paddingBottom: 8 }}>
+          {standaloneMode ? '📌 Chú giải tự do (Khung chú giải)' : '📝 Chú thích từ/ngữ'}
+        </div>
+
+        {standaloneMode && (
+          <div className="form-group" style={{ marginBottom: 12 }}>
+            <label className="form-label" style={{ fontSize: 11 }}>Tiêu đề / Từ khóa (Tùy chọn)</label>
+            <input
+              className="form-input"
+              value={word}
+              onChange={e => setWord(e.target.value)}
+              placeholder="Ví dụ: Ý nghĩa đoạn kinh, Khái niệm Nghiệp..."
+              style={{ fontSize: 13, padding: '7px 10px' }}
+            />
+          </div>
+        )}
+
         <div className="form-group">
-          <label className="form-label">Nội dung chú thích</label>
+          <label className="form-label" style={{ fontSize: 11 }}>Nội dung chú giải *</label>
           <textarea
             ref={ref}
             className="form-textarea"
             value={note}
             onChange={e => setNote(e.target.value)}
-            placeholder="Nhập chú thích..."
+            placeholder="Nhập nội dung giải thích, chú giải..."
+            style={{ minHeight: 110, fontSize: 13 }}
             onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleSave(); }}
           />
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Ctrl+Enter để lưu</div>
@@ -90,7 +116,7 @@ function AnnotationPopup({ annotationId, initialWord, suttaId, onClose, onRemove
           {existing && (
             <button className="btn btn-danger btn-sm" onClick={handleDelete}>Xóa chú thích</button>
           )}
-          <button className="btn btn-sm btn-ghost" onClick={() => { if(!existing && onRemoveMark) onRemoveMark(annotationId); onClose(); }}>Hủy</button>
+          <button className="btn btn-sm btn-ghost" onClick={() => { if(!existing && !standaloneMode && onRemoveMark) onRemoveMark(annotationId); onClose(); }}>Hủy</button>
           <button className="btn btn-sm btn-primary" onClick={handleSave} disabled={!note.trim()}>
             {existing ? 'Cập nhật' : 'Lưu chú thích'}
           </button>
@@ -940,7 +966,11 @@ export default function SuttaReader({ sutta }) {
       const marks = doc.querySelectorAll('mark.annotated');
       const existingIds = new Set(Array.from(marks).map(m => m.dataset.annotationId));
       
-      const orphanedIds = Object.keys(sutta.annotations || {}).filter(id => !existingIds.has(id));
+      const orphanedIds = Object.keys(sutta.annotations || {}).filter(id => {
+        const anno = sutta.annotations[id];
+        if (anno?.standalone || (id && id.startsWith('anno-standalone-'))) return false;
+        return !existingIds.has(id);
+      });
       
       if (orphanedIds.length > 0) {
         if (window.confirm('Đoạn kinh chứa chú thích đã bị xóa. Xóa luôn chú thích đính kèm?')) {
@@ -979,10 +1009,23 @@ export default function SuttaReader({ sutta }) {
       setPopup({
         annotationId: e.detail.annotationId,
         initialWord: e.detail.initialWord,
+        isStandalone: e.detail.isStandalone || false,
+      });
+    };
+    const handleCreateStandalone = () => {
+      const newId = 'anno-standalone-' + Date.now();
+      setPopup({
+        annotationId: newId,
+        initialWord: '',
+        isStandalone: true,
       });
     };
     window.addEventListener('edit-annotation', handleEdit);
-    return () => window.removeEventListener('edit-annotation', handleEdit);
+    window.addEventListener('create-standalone-annotation', handleCreateStandalone);
+    return () => {
+      window.removeEventListener('edit-annotation', handleEdit);
+      window.removeEventListener('create-standalone-annotation', handleCreateStandalone);
+    };
   }, []);
 
   const renderHeaderAndMetadata = () => (
@@ -1306,6 +1349,7 @@ export default function SuttaReader({ sutta }) {
             <AnnotationPopup
               annotationId={popup.annotationId}
               initialWord={popup.initialWord}
+              isStandalone={popup.isStandalone}
               suttaId={sutta.id}
               onClose={() => setPopup(null)}
               onRemoveMark={handleRemoveMark}
@@ -1372,6 +1416,7 @@ export default function SuttaReader({ sutta }) {
             <AnnotationPopup
               annotationId={popup.annotationId}
               initialWord={popup.initialWord}
+              isStandalone={popup.isStandalone}
               suttaId={sutta.id}
               onClose={() => setPopup(null)}
               onRemoveMark={handleRemoveMark}
